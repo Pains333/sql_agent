@@ -1,0 +1,9 @@
+psycopg2-binary
+requests
+rich
+fastapi
+uvicorn
+pandas
+openpyxl
+pyarrow
+python-multipart
