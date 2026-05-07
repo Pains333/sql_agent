@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/sql_agent.iml" filepath="$PROJECT_DIR$/.idea/sql_agent.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/sql-agent.iml" filepath="$PROJECT_DIR$/.idea/sql-agent.iml" />
     </modules>
   </component>
 </project>
