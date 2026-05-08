@@ -163,7 +163,7 @@ def reset_setup():
     # 删除配置文件
     if os.path.exists(SETUP_CONFIG_PATH):
         os.remove(SETUP_CONFIG_PATH)
-    # 清除 skill.md 中的数据库结构信息
+    # 清除 skill.md（重新连接后会重新扫描写入）
     skill_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skill.md")
     with open(skill_path, "w", encoding="utf-8") as f:
         f.write("# 数据库元信息\n\n> 此文件由 SQL Agent 自动维护，记录所有数据库和表的结构信息。\n")
