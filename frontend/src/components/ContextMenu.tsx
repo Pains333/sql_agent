@@ -3,6 +3,7 @@
    ============================================ */
 
 import { useEffect, useRef } from 'react';
+import { t } from '../i18n';
 import './ContextMenu.css';
 
 interface ContextMenuProps {
@@ -29,8 +30,9 @@ export default function ContextMenu({ x, y, onDelete, onClose }: ContextMenuProp
     <div className="context-menu" style={{ top: y, left: x }} ref={ref}>
       <button className="context-menu-item danger" onClick={onDelete}>
         <span className="context-menu-icon">🗑️</span>
-        删除对话
+        {t('sidebar.delete')}
       </button>
     </div>
   );
 }
+

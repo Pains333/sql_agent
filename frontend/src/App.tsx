@@ -74,16 +74,23 @@ export default function App() {
     }
   }, []);
 
-  /* ---- Create new conversation ---- */
-  async function handleNew() {
+  /* ---- Create & activate a new conversation (shared logic) ---- */
+  async function _createAndActivate(): Promise<string | null> {
     try {
       const conv = await createConversation();
       await refreshList();
       setActiveId(conv.id);
       setActiveConv({ ...conv, messages: [] });
+      return conv.id;
     } catch (err) {
       console.error('创建对话失败:', err);
+      return null;
     }
+  }
+
+  /* ---- Create new conversation ---- */
+  async function handleNew() {
+    await _createAndActivate();
   }
 
   /* ---- Select conversation ---- */
@@ -109,16 +116,7 @@ export default function App() {
 
   /* ---- Auto-create conversation when sending first message ---- */
   async function handleAutoCreate(_firstMessage: string): Promise<string | null> {
-    try {
-      const conv = await createConversation();
-      await refreshList();
-      setActiveId(conv.id);
-      setActiveConv({ ...conv, messages: [] });
-      return conv.id;
-    } catch (err) {
-      console.error('自动创建对话失败:', err);
-      return null;
-    }
+    return _createAndActivate();
   }
 
   /* ---- Message sent callback ---- */

@@ -4,8 +4,8 @@ FastAPI 后端服务 - 为 React 前端提供 REST API
 
 import json
 import os
+import re
 import uuid
-import tempfile
 import requests
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -164,8 +164,7 @@ def reset_setup():
     if os.path.exists(SETUP_CONFIG_PATH):
         os.remove(SETUP_CONFIG_PATH)
     # 清除 skill.md（重新连接后会重新扫描写入）
-    skill_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skill.md")
-    with open(skill_path, "w", encoding="utf-8") as f:
+    with open(config.SKILL_FILE_PATH, "w", encoding="utf-8") as f:
         f.write("# 数据库元信息\n\n> 此文件由 SQL Agent 自动维护，记录所有数据库和表的结构信息。\n")
     return {"success": True}
 
@@ -236,34 +235,15 @@ def submit_setup(req: SetupRequest):
     }
 
     try:
-        # 关闭旧 agent
-        if agent:
-            agent.close()
-
-        # 创建新 agent
-        agent = SQLAgent(
-            model_type=req.model_type,
-            model_name=req.model_name,
-            api_base_url=req.api_base_url,
-            api_key=req.api_key,
-            api_model=req.api_model,
-            db_type=req.db_type,
-            db_host=req.db_host,
-            db_port=req.db_port,
-            db_user=req.db_user,
-            db_password=req.db_password,
-        )
-
-        # 测试数据库连接
-        _ = agent.db.conn  # 触发连接
+        # 初始化 Agent（复用统一方法）
+        if not _init_agent_from_config(cfg):
+            raise RuntimeError("数据库连接失败")
 
         # 扫描数据库结构
         scan_result = agent.scan_all_databases()
 
         # 保存配置到文件（下次启动自动加载）
         _save_setup_config(cfg)
-
-        setup_done = True
 
         return {
             "success": True,
@@ -372,55 +352,7 @@ def send_message(conv_id: str, req: MessageRequest):
 
         # 如果是 import_file action，直接执行数据导入
         if plan.get("action") == "import_file" and file_data:
-            target_table = plan.get("target_table", "").strip()
-            target_db = plan.get("target_db", "").strip() or None
-
-            if not target_table:
-                # 尝试从 explanation 中提取表名
-                import re
-                match = re.search(r'[\u5bfc\u5165|\u5199\u5165|\u589e\u52a0].*?[\u5230|\u8868]\s*[`\'"]?(\w+)[`\'"]?', plan.get("explanation", ""))
-                if match:
-                    target_table = match.group(1)
-
-            if not target_table:
-                ai_message = store.add_message(
-                    conv_id,
-                    role="assistant",
-                    content="请指定目标表名，例如: 将附件数据导入到 users 表",
-                    action="import_file",
-                    error="未指定目标表名",
-                )
-                return ai_message
-
-            # 执行导入
-            import_result = import_data_to_table(
-                db_client=ag.db,
-                table_name=target_table,
-                file_data=file_data,
-                database=target_db,
-            )
-
-            # 清理上传的文件数据
-            if req.upload_id in upload_storage:
-                del upload_storage[req.upload_id]
-
-            if import_result["success"]:
-                ai_message = store.add_message(
-                    conv_id,
-                    role="assistant",
-                    content=import_result["message"],
-                    action="import_file",
-                    result=f"成功导入 {import_result['inserted']} 行数据",
-                )
-            else:
-                ai_message = store.add_message(
-                    conv_id,
-                    role="assistant",
-                    content=import_result["message"],
-                    action="import_file",
-                    error=import_result["message"],
-                )
-            return ai_message
+            return _handle_import_file(ag, conv_id, plan, file_data, req.upload_id)
 
         # 第二阶段：执行
         result = ag.execute_plan(plan, confirm_callback=None)
@@ -464,6 +396,59 @@ def send_message(conv_id: str, req: MessageRequest):
             error=str(e),
         )
         return ai_message
+
+
+def _handle_import_file(ag, conv_id: str, plan: dict, file_data: dict, upload_id: str):
+    """处理文件导入操作（从 send_message 中提取）"""
+    target_table = plan.get("target_table", "").strip()
+    target_db = plan.get("target_db", "").strip() or None
+
+    if not target_table:
+        # 尝试从 explanation 中提取表名
+        match = re.search(
+            r'[\u5bfc\u5165|\u5199\u5165|\u589e\u52a0].*?[\u5230|\u8868]\s*[`\'"]?(\w+)[`\'"]?',
+            plan.get("explanation", ""),
+        )
+        if match:
+            target_table = match.group(1)
+
+    if not target_table:
+        return store.add_message(
+            conv_id,
+            role="assistant",
+            content="请指定目标表名，例如: 将附件数据导入到 users 表",
+            action="import_file",
+            error="未指定目标表名",
+        )
+
+    # 执行导入
+    import_result = import_data_to_table(
+        db_client=ag.db,
+        table_name=target_table,
+        file_data=file_data,
+        database=target_db,
+    )
+
+    # 清理上传的文件数据
+    if upload_id in upload_storage:
+        del upload_storage[upload_id]
+
+    if import_result["success"]:
+        return store.add_message(
+            conv_id,
+            role="assistant",
+            content=import_result["message"],
+            action="import_file",
+            result=f"成功导入 {import_result['inserted']} 行数据",
+        )
+    else:
+        return store.add_message(
+            conv_id,
+            role="assistant",
+            content=import_result["message"],
+            action="import_file",
+            error=import_result["message"],
+        )
 
 
 # === 工具 API ===

@@ -91,6 +91,17 @@ class ConversationStore:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def _update_conversation(self, conv_id: str, updater) -> Optional[dict]:
+        """读取对话、应用更新函数、写回文件"""
+        conversation = self.get_conversation(conv_id)
+        if conversation is None:
+            return None
+        result = updater(conversation)
+        conversation["updated_at"] = datetime.now().isoformat()
+        with open(self._get_path(conv_id), "w", encoding="utf-8") as f:
+            json.dump(conversation, f, ensure_ascii=False, indent=2)
+        return result
+
     def add_message(
         self,
         conv_id: str,
@@ -116,10 +127,6 @@ class ConversationStore:
         Returns:
             添加的消息对象
         """
-        conversation = self.get_conversation(conv_id)
-        if conversation is None:
-            return None
-
         message = {
             "id": str(uuid.uuid4())[:8],
             "role": role,
@@ -135,20 +142,17 @@ class ConversationStore:
         if error:
             message["error"] = error
 
-        conversation["messages"].append(message)
-        conversation["updated_at"] = datetime.now().isoformat()
+        def updater(conversation):
+            conversation["messages"].append(message)
+            # 如果是第一条用户消息，用它作为标题
+            if role == "user" and len(conversation["messages"]) == 1:
+                title = content[:30]
+                if len(content) > 30:
+                    title += "..."
+                conversation["title"] = title
+            return message
 
-        # 如果是第一条用户消息，用它作为标题
-        if role == "user" and len(conversation["messages"]) == 1:
-            title = content[:30]
-            if len(content) > 30:
-                title += "..."
-            conversation["title"] = title
-
-        with open(self._get_path(conv_id), "w", encoding="utf-8") as f:
-            json.dump(conversation, f, ensure_ascii=False, indent=2)
-
-        return message
+        return self._update_conversation(conv_id, updater)
 
     def delete_conversation(self, conv_id: str) -> bool:
         """
@@ -177,13 +181,9 @@ class ConversationStore:
         Returns:
             是否成功更新
         """
-        conversation = self.get_conversation(conv_id)
-        if conversation is None:
-            return False
+        def updater(conversation):
+            conversation["title"] = title
+            return True
 
-        conversation["title"] = title
-        conversation["updated_at"] = datetime.now().isoformat()
-
-        with open(self._get_path(conv_id), "w", encoding="utf-8") as f:
-            json.dump(conversation, f, ensure_ascii=False, indent=2)
-        return True
+        result = self._update_conversation(conv_id, updater)
+        return result is not None

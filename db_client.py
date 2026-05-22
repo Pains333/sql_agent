@@ -121,6 +121,15 @@ class DBClient:
         self.current_db = database
         self._connect()
 
+    def _fetchall(self, sql: str, params=None) -> list:
+        """执行查询并返回所有结果行（自动管理 cursor）"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(sql, params or [])
+            return cursor.fetchall()
+        finally:
+            cursor.close()
+
     # ===========================
     # SQL 执行
     # ===========================
@@ -226,63 +235,43 @@ class DBClient:
     # --- PostgreSQL 表结构查询 ---
 
     def _describe_table_pg(self, table_name: str) -> list:
-        cursor = self.conn.cursor()
-        try:
-            # 字段信息
-            cursor.execute("""
-                SELECT c.column_name, c.data_type, c.character_maximum_length,
-                       c.numeric_precision, c.numeric_scale, c.is_nullable, c.column_default,
-                       CASE WHEN c.data_type = 'integer' AND c.column_default LIKE 'nextval%%' THEN 'SERIAL'
-                            WHEN c.data_type = 'bigint' AND c.column_default LIKE 'nextval%%' THEN 'BIGSERIAL'
-                            WHEN c.character_maximum_length IS NOT NULL THEN c.data_type || '(' || c.character_maximum_length || ')'
-                            WHEN c.numeric_precision IS NOT NULL AND c.data_type = 'numeric' THEN 'NUMERIC(' || c.numeric_precision || ',' || COALESCE(c.numeric_scale, 0) || ')'
-                            ELSE UPPER(c.data_type)
-                       END AS full_type
-                FROM information_schema.columns c
-                WHERE c.table_schema = 'public' AND c.table_name = %s
-                ORDER BY c.ordinal_position;
-            """, (table_name,))
-            columns_info = cursor.fetchall()
-        finally:
-            cursor.close()
+        # 字段信息
+        columns_info = self._fetchall("""
+            SELECT c.column_name, c.data_type, c.character_maximum_length,
+                   c.numeric_precision, c.numeric_scale, c.is_nullable, c.column_default,
+                   CASE WHEN c.data_type = 'integer' AND c.column_default LIKE 'nextval%%' THEN 'SERIAL'
+                        WHEN c.data_type = 'bigint' AND c.column_default LIKE 'nextval%%' THEN 'BIGSERIAL'
+                        WHEN c.character_maximum_length IS NOT NULL THEN c.data_type || '(' || c.character_maximum_length || ')'
+                        WHEN c.numeric_precision IS NOT NULL AND c.data_type = 'numeric' THEN 'NUMERIC(' || c.numeric_precision || ',' || COALESCE(c.numeric_scale, 0) || ')'
+                        ELSE UPPER(c.data_type)
+                   END AS full_type
+            FROM information_schema.columns c
+            WHERE c.table_schema = 'public' AND c.table_name = %s
+            ORDER BY c.ordinal_position;
+        """, (table_name,))
 
         # 主键
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                SELECT kcu.column_name FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-                WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY';
-            """, (table_name,))
-            pk_columns = {row[0] for row in cursor.fetchall()}
-        finally:
-            cursor.close()
+        pk_columns = {row[0] for row in self._fetchall("""
+            SELECT kcu.column_name FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY';
+        """, (table_name,))}
 
         # 唯一约束
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                SELECT kcu.column_name FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-                WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'UNIQUE';
-            """, (table_name,))
-            unique_columns = {row[0] for row in cursor.fetchall()}
-        finally:
-            cursor.close()
+        unique_columns = {row[0] for row in self._fetchall("""
+            SELECT kcu.column_name FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'UNIQUE';
+        """, (table_name,))}
 
         # 外键
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                SELECT kcu.column_name, ccu.table_name, ccu.column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-                JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-                WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'FOREIGN KEY';
-            """, (table_name,))
-            fk_info = {row[0]: f"REFERENCES {row[1]}({row[2]})" for row in cursor.fetchall()}
-        finally:
-            cursor.close()
+        fk_info = {row[0]: f"REFERENCES {row[1]}({row[2]})" for row in self._fetchall("""
+            SELECT kcu.column_name, ccu.table_name, ccu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+            WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'FOREIGN KEY';
+        """, (table_name,))}
 
         result = []
         for col in columns_info:
@@ -332,27 +321,17 @@ class DBClient:
     # --- Oracle 表结构查询 ---
 
     def _describe_table_oracle(self, table_name: str) -> list:
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                SELECT column_name, data_type, data_length, data_precision, data_scale, nullable, data_default
-                FROM user_tab_columns WHERE table_name = :1 ORDER BY column_id
-            """, [table_name.upper()])
-            columns_info = cursor.fetchall()
-        finally:
-            cursor.close()
+        columns_info = self._fetchall("""
+            SELECT column_name, data_type, data_length, data_precision, data_scale, nullable, data_default
+            FROM user_tab_columns WHERE table_name = :1 ORDER BY column_id
+        """, [table_name.upper()])
 
         # 主键
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                SELECT cols.column_name FROM all_constraints cons
-                JOIN all_cons_columns cols ON cons.constraint_name = cols.constraint_name
-                WHERE cons.table_name = :1 AND cons.constraint_type = 'P' AND cons.owner = USER
-            """, [table_name.upper()])
-            pk_columns = {row[0] for row in cursor.fetchall()}
-        finally:
-            cursor.close()
+        pk_columns = {row[0] for row in self._fetchall("""
+            SELECT cols.column_name FROM all_constraints cons
+            JOIN all_cons_columns cols ON cons.constraint_name = cols.constraint_name
+            WHERE cons.table_name = :1 AND cons.constraint_type = 'P' AND cons.owner = USER
+        """, [table_name.upper()])}
 
         result = []
         for col in columns_info:
@@ -388,13 +367,15 @@ class DBClient:
     def get_database_info(self, database: str) -> dict:
         """获取数据库详细信息"""
         if self.db_type == "postgresql":
-            _, rows = self.execute_query(
-                f"SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = '{database}';"
+            rows = self._fetchall(
+                "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = %s;",
+                (database,)
             )
             encoding = rows[0][0] if rows else "UNKNOWN"
         elif self.db_type == "mysql":
-            _, rows = self.execute_query(
-                f"SELECT DEFAULT_CHARACTER_SET_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '{database}';"
+            rows = self._fetchall(
+                "SELECT DEFAULT_CHARACTER_SET_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = %s;",
+                (database,)
             )
             encoding = rows[0][0] if rows else "utf8mb4"
         else:

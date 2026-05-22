@@ -309,11 +309,7 @@ def main():
 
             console.print()
 
-        except KeyboardInterrupt:
-            console.print("\n[bold cyan]👋 再见！[/bold cyan]")
-            agent.close()
-            sys.exit(0)
-        except EOFError:
+        except (KeyboardInterrupt, EOFError):
             console.print("\n[bold cyan]👋 再见！[/bold cyan]")
             agent.close()
             sys.exit(0)

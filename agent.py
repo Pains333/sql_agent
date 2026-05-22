@@ -206,21 +206,13 @@ class SQLAgent:
             result["target_db"] = target_db
             result["target_table"] = parsed.get("target_table", "").strip()
 
-            # import_file action: 标记成功，由 server 层处理实际导入
-            if action == "import_file":
-                result["success"] = True
-                result["result"] = explanation
-            # 纯对话，不需要执行 SQL
-            elif action == "chat" or not sql:
+            # import_file / 纯对话：标记成功，不需要执行 SQL
+            if action in ("import_file", "chat") or not sql:
                 result["success"] = True
                 result["result"] = explanation
 
-        except ConnectionError as e:
-            result["error"] = str(e)
-        except TimeoutError as e:
-            result["error"] = str(e)
         except Exception as e:
-            result["error"] = f"处理失败: {e}"
+            result["error"] = f"处理失败: {e}" if not isinstance(e, (ConnectionError, TimeoutError)) else str(e)
 
         return result
 
@@ -274,59 +266,51 @@ class SQLAgent:
             # 4. 更新 skill.md
             self._update_skill(action, sql, target_db)
 
-        except ConnectionError as e:
-            result["error"] = str(e)
-        except TimeoutError as e:
-            result["error"] = str(e)
         except Exception as e:
-            result["error"] = f"处理失败: {e}"
+            result["error"] = f"处理失败: {e}" if not isinstance(e, (ConnectionError, TimeoutError)) else str(e)
 
         return result
 
+    # action → 执行方法的映射
+    _ACTION_DISPATCH = {
+        "query": "execute_query",
+        "create_db": "execute_ddl", "drop_db": "execute_ddl",
+        "create_table": "execute_ddl", "drop_table": "execute_ddl",
+        "alter_table": "execute_ddl", "other": "execute_ddl",
+        "insert": "execute_dml", "update": "execute_dml", "delete": "execute_dml",
+    }
+
     def _execute_sql(self, action: str, sql: str):
         """根据 action 类型执行 SQL"""
-        if action in ("query",):
-            return self.db.execute_query(sql)
-        elif action in ("create_db", "drop_db", "create_table", "drop_table", "alter_table", "other"):
-            return self.db.execute_ddl(sql)
-        elif action in ("insert", "update", "delete"):
-            return self.db.execute_dml(sql)
-        else:
-            return self.db.execute_query(sql)
+        method_name = self._ACTION_DISPATCH.get(action, "execute_query")
+        return getattr(self.db, method_name)(sql)
 
     def _update_skill(self, action: str, sql: str, target_db: str):
         """根据操作类型更新 skill.md"""
         try:
-            if action == "create_db":
+            if action in ("create_db", "drop_db"):
                 db_name = self._extract_db_name(sql)
-                if db_name:
+                if not db_name:
+                    return
+                if action == "create_db":
                     db_info = self.db.get_database_info(db_name)
                     self.skill.add_database(db_name, db_info.get("encoding", "UTF8"))
-
-            elif action == "drop_db":
-                db_name = self._extract_db_name(sql)
-                if db_name:
+                else:
                     self.skill.remove_database(db_name)
 
-            elif action == "create_table":
+            elif action in ("create_table", "drop_table", "alter_table"):
                 table_name = self._extract_table_name(sql)
                 db_name = target_db or self.db.current_db
-                if table_name:
-                    columns = self.db.describe_table(table_name, db_name)
-                    self.skill.add_table(db_name, table_name, columns)
-
-            elif action == "drop_table":
-                table_name = self._extract_table_name(sql)
-                db_name = target_db or self.db.current_db
-                if table_name:
+                if not table_name:
+                    return
+                if action == "drop_table":
                     self.skill.remove_table(db_name, table_name)
-
-            elif action == "alter_table":
-                table_name = self._extract_table_name(sql)
-                db_name = target_db or self.db.current_db
-                if table_name:
+                else:
                     columns = self.db.describe_table(table_name, db_name)
-                    self.skill.update_table(db_name, table_name, columns)
+                    if action == "create_table":
+                        self.skill.add_table(db_name, table_name, columns)
+                    else:
+                        self.skill.update_table(db_name, table_name, columns)
 
         except Exception:
             # skill.md 更新失败不应影响主流程

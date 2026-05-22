@@ -240,63 +240,44 @@ def _batch_insert(
     column_mapping: dict,
     file_columns: list,
     rows: list,
-    batch_size: int = 100,
 ) -> int:
     """
-    批量插入数据
+    逐行插入数据
 
     Returns:
         成功插入的行数
     """
-    db_type = db_client.db_type
-    total_inserted = 0
-
     # 构建列名部分
-    if db_type == "mysql":
+    if db_client.db_type == "mysql":
         col_str = ", ".join(f"`{c}`" for c in insert_columns)
-    elif db_type == "oracle":
-        col_str = ", ".join(f'"{c}"' for c in insert_columns)
     else:
-        col_str = ", ".join(f'"{c}"' for c in insert_columns)
+        col_str = ", ".join(f'"{ c}"' for c in insert_columns)
 
-    # 分批插入
-    for batch_start in range(0, len(rows), batch_size):
-        batch = rows[batch_start:batch_start + batch_size]
-
-        for row in batch:
-            values = []
-            for col_name in insert_columns:
-                file_idx = column_mapping.get(col_name)
-                if file_idx is None:
-                    values.append(None)
-                else:
-                    values.append(row[file_idx])
-
-            # 构建参数化 SQL
-            _execute_single_insert(db_client, table_name, col_str, insert_columns, values)
-            total_inserted += 1
+    total_inserted = 0
+    for row in rows:
+        values = [
+            row[column_mapping[col]] if column_mapping.get(col) is not None else None
+            for col in insert_columns
+        ]
+        _execute_single_insert(db_client, table_name, col_str, insert_columns, values)
+        total_inserted += 1
 
     return total_inserted
 
 
 def _execute_single_insert(db_client, table_name: str, col_str: str, columns: list, values: list):
     """执行单行插入（使用参数化查询防止 SQL 注入）"""
-    db_type = db_client.db_type
     cursor = db_client.conn.cursor()
-
     try:
-        if db_type == "postgresql":
-            placeholders = ", ".join(["%s"] * len(columns))
-            sql = f'INSERT INTO "{table_name}" ({col_str}) VALUES ({placeholders})'
-            cursor.execute(sql, values)
-        elif db_type == "mysql":
-            placeholders = ", ".join(["%s"] * len(columns))
-            sql = f"INSERT INTO `{table_name}` ({col_str}) VALUES ({placeholders})"
-            cursor.execute(sql, values)
-        elif db_type == "oracle":
+        if db_client.db_type == "oracle":
             placeholders = ", ".join([f":{i+1}" for i in range(len(columns))])
-            sql = f'INSERT INTO "{table_name}" ({col_str}) VALUES ({placeholders})'
-            cursor.execute(sql, values)
+        else:
+            # PostgreSQL 和 MySQL 都使用 %s 占位符
+            placeholders = ", ".join(["%s"] * len(columns))
+
+        quote = "`" if db_client.db_type == "mysql" else '"'
+        sql = f'INSERT INTO {quote}{table_name}{quote} ({col_str}) VALUES ({placeholders})'
+        cursor.execute(sql, values)
     except Exception as e:
         raise RuntimeError(f"插入数据失败: {e}")
     finally:

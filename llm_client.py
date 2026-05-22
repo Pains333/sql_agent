@@ -45,6 +45,13 @@ class LLMClient:
         """重置对话历史"""
         self.conversation_history = []
 
+    def _build_messages(self, user_message: str, system_prompt: str) -> list:
+        """构建包含系统提示、历史记录和用户消息的消息列表"""
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(self.conversation_history)
+        messages.append({"role": "user", "content": user_message})
+        return messages
+
     def chat(self, user_message: str, system_prompt: str) -> str:
         """
         发送消息并获取回复
@@ -63,9 +70,7 @@ class LLMClient:
 
     def _chat_ollama(self, user_message: str, system_prompt: str) -> str:
         """Ollama 本地模型调用"""
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(self.conversation_history)
-        messages.append({"role": "user", "content": user_message})
+        messages = self._build_messages(user_message, system_prompt)
 
         payload = {
             "model": self.model,
@@ -101,9 +106,7 @@ class LLMClient:
 
     def _chat_openai(self, user_message: str, system_prompt: str) -> str:
         """OpenAI 兼容 API 调用"""
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(self.conversation_history)
-        messages.append({"role": "user", "content": user_message})
+        messages = self._build_messages(user_message, system_prompt)
 
         headers = {
             "Content-Type": "application/json",
