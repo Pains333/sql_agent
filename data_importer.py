@@ -9,6 +9,10 @@
 
 from typing import Optional
 
+from exceptions import DataImportError
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # 用于识别自增字段的关键词
 AUTO_INCREMENT_KEYWORDS = {
@@ -16,6 +20,9 @@ AUTO_INCREMENT_KEYWORDS = {
     "auto_increment",                            # MySQL
     "identity", "generated always as identity",  # Oracle
 }
+
+# 批量插入的每批行数
+BATCH_SIZE = 500
 
 
 def import_data_to_table(
@@ -34,14 +41,7 @@ def import_data_to_table(
         database: 目标数据库名（可选，默认当前数据库）
 
     Returns:
-        {
-            "success": bool,
-            "message": str,
-            "inserted": int,          # 成功插入行数
-            "skipped_columns": list,  # 跳过的附件列
-            "null_columns": list,     # 填充 NULL 的表列
-            "auto_columns": list,     # 自增列（跳过）
-        }
+        {success, message, inserted, skipped_columns, null_columns, auto_columns}
     """
     result = {
         "success": False,
@@ -76,21 +76,19 @@ def import_data_to_table(
         result["null_columns"] = match_result["null_columns"]
         result["auto_columns"] = match_result["auto_columns"]
 
-        # 4. 构建并执行 INSERT
-        insert_columns = match_result["insert_columns"]  # 要写入的列名列表
-        column_mapping = match_result["column_mapping"]   # 表列名 → 文件列索引 (或 None 表示填 NULL)
+        insert_columns = match_result["insert_columns"]
+        column_mapping = match_result["column_mapping"]
 
         if not insert_columns:
             result["message"] = "没有可匹配的列，无法导入数据"
             return result
 
-        # 5. 批量插入
+        # 4. 批量插入
         inserted = _batch_insert(
             db_client=db_client,
             table_name=table_name,
             insert_columns=insert_columns,
             column_mapping=column_mapping,
-            file_columns=file_data["columns"],
             rows=file_data["rows"],
         )
 
@@ -107,7 +105,10 @@ def import_data_to_table(
             msg_parts.append(f"以下附件列未匹配表字段，已跳过: {', '.join(result['skipped_columns'])}")
         result["message"] = "。\n".join(msg_parts)
 
+        logger.info("数据导入完成: %s 行 → %s", inserted, table_name)
+
     except Exception as e:
+        logger.error("数据导入失败: %s", e, exc_info=True)
         result["message"] = f"导入失败: {e}"
 
     return result
@@ -117,36 +118,25 @@ def _analyze_table_columns(table_columns: list) -> list:
     """
     分析表结构，标记每个字段的属性
 
-    Args:
-        table_columns: describe_table 返回的 [(col_name, full_type, constraints), ...]
-
     Returns:
-        [{
-            "name": str,
-            "type": str,
-            "is_nullable": bool,
-            "is_auto_increment": bool,
-            "is_primary_key": bool,
-        }, ...]
+        [{name, type, is_nullable, is_auto_increment, is_primary_key}, ...]
     """
     result = []
     for col_name, col_type, constraints in table_columns:
         constraints_lower = constraints.lower() if constraints else ""
         col_type_lower = col_type.lower() if col_type else ""
 
-        is_auto = False
-        # 检查类型名是否包含自增关键词
-        for kw in AUTO_INCREMENT_KEYWORDS:
-            if kw in col_type_lower or kw in constraints_lower:
-                is_auto = True
-                break
+        is_auto = any(
+            kw in col_type_lower or kw in constraints_lower
+            for kw in AUTO_INCREMENT_KEYWORDS
+        )
 
         is_nullable = "not null" not in constraints_lower and "primary key" not in constraints_lower
         is_pk = "primary key" in constraints_lower
 
         # 自增主键一定可以跳过
         if is_auto and is_pk:
-            is_nullable = True  # 视为可跳过
+            is_nullable = True
 
         result.append({
             "name": col_name,
@@ -164,19 +154,13 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
     执行列匹配逻辑
 
     Returns:
-        {
-            "error": str or None,
-            "insert_columns": [str, ...],       # 要写入的表列名
-            "column_mapping": {str: int or None}, # 表列名 → 文件列索引
-            "skipped_columns": [str, ...],       # 跳过的附件列
-            "null_columns": [str, ...],          # 填充 NULL 的表列
-            "auto_columns": [str, ...],          # 自增列
-        }
+        {error, insert_columns, column_mapping, skipped_columns, null_columns, auto_columns}
     """
     # 文件列名（小写映射到原始索引）
-    file_col_map = {}
-    for i, col in enumerate(file_columns):
-        file_col_map[col.lower().strip()] = i
+    file_col_map = {
+        col.lower().strip(): i
+        for i, col in enumerate(file_columns)
+    }
 
     insert_columns = []
     column_mapping = {}
@@ -194,16 +178,13 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
             continue
 
         if col_name_lower in file_col_map:
-            # 匹配成功
             insert_columns.append(col_name)
             column_mapping[col_name] = file_col_map[col_name_lower]
         elif col_info["is_nullable"]:
-            # 可空字段缺失 → 填 NULL
             insert_columns.append(col_name)
             column_mapping[col_name] = None
             null_columns.append(col_name)
         else:
-            # NOT NULL 字段缺失 → 报错
             missing_required.append(col_name)
 
     if missing_required:
@@ -216,7 +197,6 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
             "auto_columns": auto_columns,
         }
 
-    # 找出附件中多余的列（不在表结构中的）
     table_col_names = {info["name"].lower().strip() for info in table_info}
     skipped_columns = [
         col for col in file_columns
@@ -233,52 +213,57 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
     }
 
 
+def _build_row_values(row: list, insert_columns: list, column_mapping: dict) -> list:
+    """为单行数据构建 VALUES 参数列表"""
+    return [
+        row[column_mapping[col]] if column_mapping.get(col) is not None else None
+        for col in insert_columns
+    ]
+
+
 def _batch_insert(
     db_client,
     table_name: str,
     insert_columns: list,
     column_mapping: dict,
-    file_columns: list,
     rows: list,
 ) -> int:
     """
-    逐行插入数据
+    批量插入数据（使用 executemany，每批 BATCH_SIZE 行）
 
     Returns:
         成功插入的行数
     """
     # 构建列名部分
-    if db_client.db_type == "mysql":
-        col_str = ", ".join(f"`{c}`" for c in insert_columns)
+    quote = "`" if db_client.db_type == "mysql" else '"'
+    col_str = ", ".join(f"{quote}{c}{quote}" for c in insert_columns)
+
+    # 构建占位符
+    if db_client.db_type == "oracle":
+        placeholders = ", ".join(f":{i+1}" for i in range(len(insert_columns)))
     else:
-        col_str = ", ".join(f'"{ c}"' for c in insert_columns)
+        placeholders = ", ".join(["%s"] * len(insert_columns))
+
+    sql = f'INSERT INTO {quote}{table_name}{quote} ({col_str}) VALUES ({placeholders})'
 
     total_inserted = 0
-    for row in rows:
-        values = [
-            row[column_mapping[col]] if column_mapping.get(col) is not None else None
-            for col in insert_columns
+
+    for batch_start in range(0, len(rows), BATCH_SIZE):
+        batch = rows[batch_start:batch_start + BATCH_SIZE]
+        values_list = [
+            _build_row_values(row, insert_columns, column_mapping)
+            for row in batch
         ]
-        _execute_single_insert(db_client, table_name, col_str, insert_columns, values)
-        total_inserted += 1
+
+        try:
+            db_client.execute_many(sql, values_list)
+            total_inserted += len(batch)
+        except Exception as e:
+            raise DataImportError(
+                f"批量插入失败 (行 {batch_start+1}-{batch_start+len(batch)}): {e}"
+            ) from e
+
+        if batch_start > 0 and batch_start % (BATCH_SIZE * 10) == 0:
+            logger.info("已插入 %d / %d 行", total_inserted, len(rows))
 
     return total_inserted
-
-
-def _execute_single_insert(db_client, table_name: str, col_str: str, columns: list, values: list):
-    """执行单行插入（使用参数化查询防止 SQL 注入）"""
-    cursor = db_client.conn.cursor()
-    try:
-        if db_client.db_type == "oracle":
-            placeholders = ", ".join([f":{i+1}" for i in range(len(columns))])
-        else:
-            # PostgreSQL 和 MySQL 都使用 %s 占位符
-            placeholders = ", ".join(["%s"] * len(columns))
-
-        quote = "`" if db_client.db_type == "mysql" else '"'
-        sql = f'INSERT INTO {quote}{table_name}{quote} ({col_str}) VALUES ({placeholders})'
-        cursor.execute(sql, values)
-    except Exception as e:
-        raise RuntimeError(f"插入数据失败: {e}")
-    finally:
-        cursor.close()

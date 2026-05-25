@@ -4,9 +4,14 @@
 """
 
 import os
-import pandas as pd
-from typing import Optional
 
+import numpy as np
+import pandas as pd
+
+from exceptions import FileParseError
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # 支持的文件扩展名
 SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv", ".pkl", ".parquet", ".json"}
@@ -30,24 +35,27 @@ def parse_file(file_path: str, original_filename: str) -> dict:
             "row_count": int,
             "preview": [{"col1": val1, "col2": val2}, ...],  # 前5行预览
         }
+
+    Raises:
+        FileParseError: 文件格式不支持、大小超限、内容为空或解析失败
     """
     ext = os.path.splitext(original_filename)[1].lower()
 
     if ext not in SUPPORTED_EXTENSIONS:
-        raise ValueError(f"不支持的文件格式: {ext}，支持: {', '.join(SUPPORTED_EXTENSIONS)}")
+        raise FileParseError(f"不支持的文件格式: {ext}，支持: {', '.join(SUPPORTED_EXTENSIONS)}")
 
     # 检查文件大小
     file_size = os.path.getsize(file_path)
     if file_size > MAX_FILE_SIZE:
-        raise ValueError(f"文件大小 ({file_size // 1024 // 1024}MB) 超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
+        raise FileParseError(f"文件大小 ({file_size // 1024 // 1024}MB) 超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
 
     try:
         df = _read_file(file_path, ext)
     except Exception as e:
-        raise ValueError(f"文件解析失败: {e}")
+        raise FileParseError(f"文件解析失败: {e}") from e
 
     if df.empty:
-        raise ValueError("文件内容为空")
+        raise FileParseError("文件内容为空")
 
     # 清理列名：去除前后空格
     df.columns = [str(col).strip() for col in df.columns]
@@ -64,6 +72,8 @@ def parse_file(file_path: str, original_filename: str) -> dict:
     # 前 5 行预览
     preview_rows = rows[:5]
     preview = [dict(zip(columns, row)) for row in preview_rows]
+
+    logger.info("文件解析完成: %s, %d 列, %d 行", original_filename, len(columns), len(rows))
 
     return {
         "columns": columns,
@@ -84,19 +94,17 @@ def _read_file(file_path: str, ext: str) -> pd.DataFrame:
         data = pd.read_pickle(file_path)
         if isinstance(data, pd.DataFrame):
             return data
-        raise ValueError("PKL 文件中的数据不是 DataFrame 格式")
+        raise FileParseError("PKL 文件中的数据不是 DataFrame 格式")
     elif ext == ".parquet":
         return pd.read_parquet(file_path)
     elif ext == ".json":
         return pd.read_json(file_path)
     else:
-        raise ValueError(f"不支持的文件格式: {ext}")
+        raise FileParseError(f"不支持的文件格式: {ext}")
 
 
 def _normalize_rows(rows: list) -> list:
     """将 numpy / pandas 特殊类型转换为 Python 原生类型"""
-    import numpy as np
-
     result = []
     for row in rows:
         normalized = []

@@ -1,5 +1,5 @@
 {
-  "language": "en",
+  "language": "zh",
   "model_type": "local",
   "model_name": "gemma4:31b",
   "api_base_url": "",
@@ -9,5 +9,5 @@
   "db_host": "localhost",
   "db_port": 5432,
   "db_user": "pains",
-  "db_password": "Xc439963"
+  "db_password": "123456"
 }

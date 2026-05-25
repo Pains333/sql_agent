@@ -11,7 +11,7 @@ import './ChatArea.css';
 
 interface ChatAreaProps {
   conversation: Conversation | null;
-  onMessageSent: () => void;
+  onMessageSent: (convId: string) => void;
   onAutoCreate: (firstMessage: string) => Promise<string | null>;
 }
 
@@ -74,7 +74,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate }: 
       }
       await sendMessage(convId, text, currentUploadId);
       setAttachment(null);
-      onMessageSent();
+      onMessageSent(convId);
     } catch (err) {
       console.error('Send failed:', err);
     } finally {

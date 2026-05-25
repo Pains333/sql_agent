@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E '\\\\.\\(txt|toml|cfg|ini|yml|yaml\\)$')",
+      "Bash(python -c \":*)",
+      "Bash(python3 -c \":*)"
+    ]
+  }
+}

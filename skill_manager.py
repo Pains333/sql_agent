@@ -6,7 +6,17 @@ Skill 管理器 - 管理 skill.md 文件的读写
 import os
 import re
 from datetime import datetime
+
 import config
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+
+# skill.md 默认内容（全局唯一，供 server.py / agent.py 引用）
+DEFAULT_SKILL_CONTENT = (
+    "# 数据库元信息\n\n"
+    "> 此文件由 SQL Agent 自动维护，记录所有数据库和表的结构信息。\n"
+)
 
 
 class SkillManager:
@@ -16,11 +26,10 @@ class SkillManager:
         self.file_path = config.SKILL_FILE_PATH
         self._ensure_file_exists()
 
-    def _ensure_file_exists(self):
+    def _ensure_file_exists(self) -> None:
         """确保 skill.md 文件存在"""
         if not os.path.exists(self.file_path):
-            with open(self.file_path, "w", encoding="utf-8") as f:
-                f.write("# 数据库元信息\n\n> 此文件由 SQL Agent 自动维护，记录所有数据库和表的结构信息。\n")
+            self._write(DEFAULT_SKILL_CONTENT)
 
     def read(self) -> str:
         """读取 skill.md 内容"""
@@ -28,44 +37,39 @@ class SkillManager:
         with open(self.file_path, "r", encoding="utf-8") as f:
             return f.read()
 
-    def write(self, content: str):
+    def _write(self, content: str) -> None:
         """写入 skill.md 内容"""
         with open(self.file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-    def add_database(self, db_name: str, encoding: str = "UTF8"):
-        """
-        添加数据库记录
+    # 保留 public write 作为兼容接口
+    write = _write
 
-        Args:
-            db_name: 数据库名
-            encoding: 字符集编码
-        """
+    def reset(self) -> None:
+        """重置 skill.md 为默认内容"""
+        self._write(DEFAULT_SKILL_CONTENT)
+
+    def add_database(self, db_name: str, encoding: str = "UTF8") -> None:
+        """添加数据库记录"""
         content = self.read()
 
-        # 检查是否已存在
         if f"## 数据库: {db_name}" in content:
             return
 
         today = datetime.now().strftime("%Y-%m-%d")
-        db_section = f"\n---\n\n## 数据库: {db_name}\n\n"
-        db_section += f"- **字符集**: {encoding}\n"
-        db_section += f"- **创建时间**: {today}\n"
+        db_section = (
+            f"\n---\n\n## 数据库: {db_name}\n\n"
+            f"- **字符集**: {encoding}\n"
+            f"- **创建时间**: {today}\n"
+        )
 
-        content += db_section
-        self.write(content)
+        self._write(content + db_section)
 
-    def remove_database(self, db_name: str):
-        """
-        删除数据库记录（包括其下所有表）
-
-        Args:
-            db_name: 数据库名
-        """
+    def remove_database(self, db_name: str) -> None:
+        """删除数据库记录（包括其下所有表）"""
         content = self.read()
 
-        # 匹配从 "---\n\n## 数据库: xxx" 到下一个 "---" 或文件末尾的所有内容
-        # 先尝试匹配带分隔线的
+        # 匹配从 "---\n\n## 数据库: xxx" 到下一个 "---" 或文件末尾
         pattern = r'\n---\n\n## 数据库: ' + re.escape(db_name) + r'\n.*?(?=\n---\n|$)'
         new_content = re.sub(pattern, '', content, flags=re.DOTALL)
 
@@ -74,19 +78,11 @@ class SkillManager:
             pattern = r'## 数据库: ' + re.escape(db_name) + r'\n.*?(?=\n---\n|$)'
             new_content = re.sub(pattern, '', content, flags=re.DOTALL)
 
-        # 清理多余空行
         new_content = re.sub(r'\n{3,}', '\n\n', new_content)
-        self.write(new_content)
+        self._write(new_content)
 
-    def add_table(self, db_name: str, table_name: str, columns: list):
-        """
-        添加表记录
-
-        Args:
-            db_name: 数据库名
-            table_name: 表名
-            columns: 字段列表 [(name, type, constraints), ...]
-        """
+    def add_table(self, db_name: str, table_name: str, columns: list) -> None:
+        """添加表记录（如已存在则先删除旧记录）"""
         content = self.read()
 
         # 确保数据库部分存在
@@ -94,10 +90,9 @@ class SkillManager:
             self.add_database(db_name)
             content = self.read()
 
-        # 检查表是否已存在，如果存在先删除旧记录
+        # 如果表已存在，在内存中删除旧记录（避免额外文件 I/O）
         if f"### 表: {table_name}" in content:
-            self._remove_table_from_content(db_name, table_name)
-            content = self.read()
+            content = self._remove_table_from_text(content, table_name)
 
         # 构建表信息
         table_section = f"\n### 表: {table_name}\n\n"
@@ -113,59 +108,36 @@ class SkillManager:
         if db_pos == -1:
             return
 
-        # 找到这个数据库部分之后的下一个 "---" 分隔线
         next_separator = content.find("\n---\n", db_pos + len(db_header))
 
         if next_separator != -1:
-            # 在下一个分隔线之前插入
             content = content[:next_separator] + table_section + content[next_separator:]
         else:
-            # 追加到文件末尾
             content += table_section
 
-        self.write(content)
+        self._write(content)
 
-    def remove_table(self, db_name: str, table_name: str):
-        """
-        删除表记录
-
-        Args:
-            db_name: 数据库名
-            table_name: 表名
-        """
-        self._remove_table_from_content(db_name, table_name)
-
-    def _remove_table_from_content(self, db_name: str, table_name: str):
-        """从 skill.md 中移除指定表"""
+    def remove_table(self, db_name: str, table_name: str) -> None:
+        """删除表记录"""
         content = self.read()
+        new_content = self._remove_table_from_text(content, table_name)
+        if new_content != content:
+            self._write(new_content)
 
-        # 匹配表部分：从 "### 表: xxx" 到下一个 "###" 或 "---" 或文件末尾
+    @staticmethod
+    def _remove_table_from_text(content: str, table_name: str) -> str:
+        """从内容文本中移除指定表（纯字符串操作，不涉及文件 I/O）"""
         pattern = r'\n### 表: ' + re.escape(table_name) + r'\n.*?(?=\n### |\n---|$)'
         new_content = re.sub(pattern, '', content, flags=re.DOTALL)
+        return re.sub(r'\n{3,}', '\n\n', new_content)
 
-        # 清理多余空行
-        new_content = re.sub(r'\n{3,}', '\n\n', new_content)
-        self.write(new_content)
-
-    def update_table(self, db_name: str, table_name: str, columns: list):
-        """
-        更新表记录（删除旧记录后重新添加）
-
-        Args:
-            db_name: 数据库名
-            table_name: 表名
-            columns: 新的字段列表
-        """
+    def update_table(self, db_name: str, table_name: str, columns: list) -> None:
+        """更新表记录（删除旧记录后重新添加）"""
         self.add_table(db_name, table_name, columns)
 
     def get_summary(self) -> str:
-        """
-        获取 skill.md 的简短摘要（用于 LLM 上下文）
-
-        Returns:
-            摘要文本
-        """
+        """获取 skill.md 的内容（用于 LLM 上下文）"""
         content = self.read()
-        if content.strip() == "# 数据库元信息\n\n> 此文件由 SQL Agent 自动维护，记录所有数据库和表的结构信息。".strip():
+        if content.strip() == DEFAULT_SKILL_CONTENT.strip():
             return "当前没有已记录的数据库和表信息。"
         return content

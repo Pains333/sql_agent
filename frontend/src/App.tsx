@@ -95,9 +95,7 @@ export default function App() {
 
   /* ---- Select conversation ---- */
   function handleSelect(id: string) {
-    if (id !== activeId) {
-      loadConversation(id);
-    }
+    loadConversation(id);
   }
 
   /* ---- Delete conversation ---- */
@@ -120,10 +118,8 @@ export default function App() {
   }
 
   /* ---- Message sent callback ---- */
-  async function handleMessageSent() {
-    if (activeId) {
-      await loadConversation(activeId);
-    }
+  async function handleMessageSent(convId: string) {
+    await loadConversation(convId);
     await refreshList();
   }
 

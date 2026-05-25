@@ -14,6 +14,7 @@ from rich.text import Text
 from rich import box
 
 from agent import SQLAgent
+from logging_config import setup_logging
 
 console = Console()
 
@@ -238,6 +239,7 @@ def handle_special_command(command: str, agent: SQLAgent) -> bool:
 
 def main():
     """主函数 - CLI 交互循环"""
+    setup_logging()
     print_banner()
 
     # 初始化 Agent

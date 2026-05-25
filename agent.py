@@ -4,16 +4,27 @@ SQL Agent 核心逻辑
 """
 
 import re
+from typing import Optional, Callable
+
 from llm_client import LLMClient
 from db_client import DBClient
-from skill_manager import SkillManager
+from skill_manager import SkillManager, DEFAULT_SKILL_CONTENT
 from prompts import build_system_prompt
+from exceptions import SQLAgentError
+from logging_config import get_logger
 
+logger = get_logger(__name__)
 
 # 需要用户确认的危险操作
 DDL_ACTIONS = {"create_db", "drop_db", "create_table", "drop_table", "alter_table"}
 # DDL 中特别危险的操作
 DANGEROUS_ACTIONS = {"drop_db", "drop_table"}
+
+# PostgreSQL / MySQL 系统数据库（扫描时排除）
+SYSTEM_DATABASES = {
+    "template0", "template1",                              # PostgreSQL
+    "information_schema", "performance_schema", "sys",     # MySQL
+}
 
 
 class SQLAgent:
@@ -92,6 +103,7 @@ class SQLAgent:
             self.db.connect_to_db(database)
             return f"已切换到数据库: {database}"
         except Exception as e:
+            logger.warning("切换数据库失败: %s", e)
             return f"切换数据库失败: {e}"
 
     def scan_all_databases(self) -> str:
@@ -103,34 +115,29 @@ class SQLAgent:
         """
         try:
             # 重置 skill.md
-            self.skill.write(
-                "# 数据库元信息\n\n> 此文件由 SQL Agent 自动维护，记录所有数据库和表的结构信息。\n"
-            )
+            self.skill.reset()
 
             current_db = self.db.current_db
             scanned_tables = 0
+            db_count = 0
 
             if self.db_type == "oracle":
                 # Oracle: 扫描当前用户下的所有表
-                db_info = {"name": current_db, "encoding": "AL32UTF8"}
-                self.skill.add_database(current_db, db_info.get("encoding", "UNKNOWN"))
+                db_count = 1
+                self.skill.add_database(current_db, "AL32UTF8")
                 tables = self.db.list_tables()
                 for table in tables:
                     try:
                         columns = self.db.describe_table(table)
                         self.skill.add_table(current_db, table, columns)
                         scanned_tables += 1
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("扫描 Oracle 表 %s 失败: %s", table, e)
             else:
                 # PostgreSQL / MySQL: 扫描所有数据库及其表
                 databases = self.db.list_databases()
-                # 过滤系统数据库
-                system_dbs = {
-                    "template0", "template1",  # PostgreSQL
-                    "information_schema", "performance_schema", "sys",  # MySQL
-                }
-                databases = [db for db in databases if db not in system_dbs]
+                databases = [db for db in databases if db not in SYSTEM_DATABASES]
+                db_count = len(databases)
 
                 for db_name in databases:
                     try:
@@ -145,20 +152,23 @@ class SQLAgent:
                                 columns = self.db.describe_table(table)
                                 self.skill.add_table(db_name, table, columns)
                                 scanned_tables += 1
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+                            except Exception as e:
+                                logger.warning("扫描表 %s.%s 失败: %s", db_name, table, e)
+                    except Exception as e:
+                        logger.warning("扫描数据库 %s 失败: %s", db_name, e)
 
                 # 切换回原始数据库
                 try:
                     self.db.connect_to_db(current_db)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error("无法切回原始数据库 %s: %s", current_db, e)
 
-            return f"扫描完成：发现 {len(databases) if self.db_type != 'oracle' else 1} 个数据库，{scanned_tables} 张表"
+            result_msg = f"扫描完成：发现 {db_count} 个数据库，{scanned_tables} 张表"
+            logger.info(result_msg)
+            return result_msg
 
         except Exception as e:
+            logger.error("数据库扫描失败: %s", e)
             return f"扫描失败: {e}"
 
     def think(self, user_input: str) -> dict:
@@ -211,12 +221,15 @@ class SQLAgent:
                 result["success"] = True
                 result["result"] = explanation
 
+        except SQLAgentError as e:
+            result["error"] = str(e)
         except Exception as e:
-            result["error"] = f"处理失败: {e}" if not isinstance(e, (ConnectionError, TimeoutError)) else str(e)
+            logger.error("think() 处理失败: %s", e, exc_info=True)
+            result["error"] = f"处理失败: {e}"
 
         return result
 
-    def execute_plan(self, plan: dict, confirm_callback=None) -> dict:
+    def execute_plan(self, plan: dict, confirm_callback: Optional[Callable] = None) -> dict:
         """
         第二阶段：根据思考结果执行操作
         包含用户确认交互，必须在 spinner 外运行
@@ -266,8 +279,11 @@ class SQLAgent:
             # 4. 更新 skill.md
             self._update_skill(action, sql, target_db)
 
+        except SQLAgentError as e:
+            result["error"] = str(e)
         except Exception as e:
-            result["error"] = f"处理失败: {e}" if not isinstance(e, (ConnectionError, TimeoutError)) else str(e)
+            logger.error("execute_plan() 处理失败: %s", e, exc_info=True)
+            result["error"] = f"处理失败: {e}"
 
         return result
 
@@ -285,7 +301,7 @@ class SQLAgent:
         method_name = self._ACTION_DISPATCH.get(action, "execute_query")
         return getattr(self.db, method_name)(sql)
 
-    def _update_skill(self, action: str, sql: str, target_db: str):
+    def _update_skill(self, action: str, sql: str, target_db: str) -> None:
         """根据操作类型更新 skill.md"""
         try:
             if action in ("create_db", "drop_db"):
@@ -312,11 +328,12 @@ class SQLAgent:
                     else:
                         self.skill.update_table(db_name, table_name, columns)
 
-        except Exception:
-            # skill.md 更新失败不应影响主流程
-            pass
+        except Exception as e:
+            # skill.md 更新失败不应影响主流程，但记录日志
+            logger.warning("更新 skill.md 失败 (action=%s): %s", action, e)
 
-    def _extract_db_name(self, sql: str) -> str:
+    @staticmethod
+    def _extract_db_name(sql: str) -> str:
         """从 SQL 中提取数据库名"""
         patterns = [
             r'CREATE\s+DATABASE\s+(?:IF\s+NOT\s+EXISTS\s+)?["\']?(\w+)["\']?',
@@ -328,7 +345,8 @@ class SQLAgent:
                 return match.group(1)
         return ""
 
-    def _extract_table_name(self, sql: str) -> str:
+    @staticmethod
+    def _extract_table_name(sql: str) -> str:
         """从 SQL 中提取表名"""
         patterns = [
             r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:\w+\.)?["\']?(\w+)["\']?',
@@ -341,6 +359,6 @@ class SQLAgent:
                 return match.group(1)
         return ""
 
-    def close(self):
+    def close(self) -> None:
         """关闭所有连接"""
         self.db.close()

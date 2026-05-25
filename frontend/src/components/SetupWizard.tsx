@@ -264,8 +264,8 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                   onChange={(e) => setDbType(e.target.value as 'postgresql' | 'mysql' | 'oracle')}
                 >
                   <option value="postgresql">PostgreSQL</option>
-                  <option value="mysql">🐬 MySQL</option>
-                  <option value="oracle">🔶 Oracle</option>
+                  <option value="mysql">MySQL</option>
+                  <option value="oracle">Oracle</option>
                 </select>
               </div>
 

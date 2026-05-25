@@ -1,11 +1,10 @@
-"""
-FastAPI 后端服务 - 为 React 前端提供 REST API
-"""
-
 import json
 import os
 import re
+import time
 import uuid
+from contextlib import asynccontextmanager
+
 import requests
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,28 +15,24 @@ from agent import SQLAgent
 from conversation_store import ConversationStore
 from file_parser import parse_file, SUPPORTED_EXTENSIONS
 from data_importer import import_data_to_table
+from skill_manager import DEFAULT_SKILL_CONTENT
+from logging_config import get_logger, setup_logging
 import config
+
+logger = get_logger(__name__)
 
 # 配置持久化文件路径
 SETUP_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setup_config.json")
 
-app = FastAPI(title="SQL Agent API", version="2.0.0")
-
-# CORS 配置
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 上传文件过期时间（30 分钟）
+UPLOAD_TTL_SECONDS = 30 * 60
 
 # 全局实例（延迟初始化，setup 后才可用）
 agent: Optional[SQLAgent] = None
 store = ConversationStore()
 setup_done = False
 
-# 上传文件的临时存储 {upload_id: {filename, columns, rows, row_count, preview}}
+# 上传文件的临时存储 {upload_id: {filename, columns, rows, row_count, preview, created_at}}
 upload_storage: dict = {}
 
 
@@ -77,7 +72,7 @@ def _init_agent_from_config(cfg: dict) -> bool:
         setup_done = True
         return True
     except Exception as e:
-        print(f"[startup] 自动加载配置失败: {e}")
+        logger.warning("自动加载配置失败: %s", e)
         if agent:
             try:
                 agent.close()
@@ -88,20 +83,49 @@ def _init_agent_from_config(cfg: dict) -> bool:
         return False
 
 
-@app.on_event("startup")
-def on_startup():
-    """服务启动时自动加载已保存的配置"""
-    global setup_done
+def _cleanup_expired_uploads():
+    """清理过期的上传文件数据"""
+    now = time.time()
+    expired = [
+        uid for uid, data in upload_storage.items()
+        if now - data.get("created_at", 0) > UPLOAD_TTL_SECONDS
+    ]
+    for uid in expired:
+        del upload_storage[uid]
+    if expired:
+        logger.info("清理了 %d 个过期上传", len(expired))
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    setup_logging()
+
     saved = _load_setup_config()
     if saved:
-        print("[startup] 发现已保存的配置，正在自动初始化...")
+        logger.info("发现已保存的配置，正在自动初始化...")
         if _init_agent_from_config(saved):
-            print("[startup] Agent 初始化成功，跳过配置向导")
+            logger.info("Agent 初始化成功，跳过配置向导")
         else:
-            # 即使 Agent 初始化失败，只要配置文件存在就标记为已配置
-            # 后续访问时会尝试延迟初始化
+            global setup_done
             setup_done = True
-            print("[startup] Agent 初始化失败，但配置已保存，将在访问时延迟重试")
+            logger.info("Agent 初始化失败，但配置已保存，将在访问时延迟重试")
+    yield
+    # 关闭时清理
+    if agent:
+        agent.close()
+
+
+app = FastAPI(title="SQL Agent API", version="2.0.0", lifespan=lifespan)
+
+# CORS 配置
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # === 请求/响应模型 ===
@@ -139,12 +163,10 @@ class TitleUpdate(BaseModel):
 def get_setup_status():
     """检查是否已完成配置"""
     global setup_done
-    # 即使内存中 setup_done 为 False，也检查配置文件是否存在
     if not setup_done:
         saved = _load_setup_config()
         if saved:
             setup_done = True
-            # 尝试后台初始化 Agent
             _init_agent_from_config(saved)
     return {"setup_done": setup_done}
 
@@ -160,12 +182,10 @@ def reset_setup():
             pass
         agent = None
     setup_done = False
-    # 删除配置文件
     if os.path.exists(SETUP_CONFIG_PATH):
         os.remove(SETUP_CONFIG_PATH)
-    # 清除 skill.md（重新连接后会重新扫描写入）
     with open(config.SKILL_FILE_PATH, "w", encoding="utf-8") as f:
-        f.write("# 数据库元信息\n\n> 此文件由 SQL Agent 自动维护，记录所有数据库和表的结构信息。\n")
+        f.write(DEFAULT_SKILL_CONTENT)
     return {"success": True}
 
 
@@ -179,13 +199,14 @@ def get_ollama_models():
         )
         resp.raise_for_status()
         data = resp.json()
-        models = []
-        for m in data.get("models", []):
-            models.append({
+        models = [
+            {
                 "name": m.get("name", ""),
                 "size": m.get("size", 0),
                 "modified_at": m.get("modified_at", ""),
-            })
+            }
+            for m in data.get("models", [])
+        ]
         return {"models": models}
     except requests.exceptions.ConnectionError:
         return {"models": [], "error": "Ollama 未运行"}
@@ -220,29 +241,13 @@ def submit_setup(req: SetupRequest):
         if not req.api_model.strip():
             raise HTTPException(status_code=400, detail="API 模型名称不能为空")
 
-    cfg = {
-        "language": req.language,
-        "model_type": req.model_type,
-        "model_name": req.model_name,
-        "api_base_url": req.api_base_url,
-        "api_key": req.api_key,
-        "api_model": req.api_model,
-        "db_type": req.db_type,
-        "db_host": req.db_host,
-        "db_port": req.db_port,
-        "db_user": req.db_user,
-        "db_password": req.db_password,
-    }
+    cfg = req.model_dump()
 
     try:
-        # 初始化 Agent（复用统一方法）
         if not _init_agent_from_config(cfg):
             raise RuntimeError("数据库连接失败")
 
-        # 扫描数据库结构
         scan_result = agent.scan_all_databases()
-
-        # 保存配置到文件（下次启动自动加载）
         _save_setup_config(cfg)
 
         return {
@@ -253,7 +258,6 @@ def submit_setup(req: SetupRequest):
         }
 
     except Exception as e:
-        # 清理失败的 agent
         if agent:
             try:
                 agent.close()
@@ -268,15 +272,14 @@ def _require_agent():
     """确保 agent 已初始化，如果未初始化则尝试从保存的配置延迟初始化"""
     global agent
     if agent is None:
-        # 尝试从已保存的配置延迟初始化
         saved = _load_setup_config()
         if saved:
-            print("[lazy-init] Agent 未初始化，尝试从保存的配置恢复...")
+            logger.info("Agent 未初始化，尝试从保存的配置恢复...")
             if _init_agent_from_config(saved):
-                print("[lazy-init] Agent 延迟初始化成功")
+                logger.info("Agent 延迟初始化成功")
                 return agent
             else:
-                print("[lazy-init] Agent 延迟初始化失败")
+                logger.warning("Agent 延迟初始化失败")
         raise HTTPException(status_code=503, detail="Agent 未初始化，请先完成配置")
     return agent
 
@@ -322,9 +325,7 @@ def update_conversation_title(conv_id: str, req: TitleUpdate):
 
 @app.post("/api/conversations/{conv_id}/messages")
 def send_message(conv_id: str, req: MessageRequest):
-    """
-    发送用户消息，获取 AI 回复
-    """
+    """发送用户消息，获取 AI 回复"""
     ag = _require_agent()
 
     conv = store.get_conversation(conv_id)
@@ -338,17 +339,23 @@ def send_message(conv_id: str, req: MessageRequest):
     # 保存用户消息
     store.add_message(conv_id, role="user", content=user_input)
 
+    # 定期清理过期上传
+    _cleanup_expired_uploads()
+
     try:
         # 检查是否有附件
         file_data = None
         file_info_text = ""
         if req.upload_id and req.upload_id in upload_storage:
             file_data = upload_storage[req.upload_id]
-            file_info_text = f"\n[附件信息] 文件名: {file_data['filename']}, 列名: {', '.join(file_data['columns'])}, 行数: {file_data['row_count']}"
+            file_info_text = (
+                f"\n[附件信息] 文件名: {file_data['filename']}, "
+                f"列名: {', '.join(file_data['columns'])}, "
+                f"行数: {file_data['row_count']}"
+            )
 
         # 第一阶段：LLM 思考（将附件信息注入用户消息）
-        augmented_input = user_input + file_info_text
-        plan = ag.think(augmented_input)
+        plan = ag.think(user_input + file_info_text)
 
         # 如果是 import_file action，直接执行数据导入
         if plan.get("action") == "import_file" and file_data:
@@ -358,53 +365,54 @@ def send_message(conv_id: str, req: MessageRequest):
         result = ag.execute_plan(plan, confirm_callback=None)
 
         # 构建 AI 回复
-        if result["error"]:
-            ai_message = store.add_message(
-                conv_id,
-                role="assistant",
-                content=result.get("explanation", "") or result["error"],
-                sql=result.get("sql", ""),
-                action=result.get("action", ""),
-                error=result["error"],
-            )
-        else:
-            result_text = ""
-            res = result.get("result")
-            if isinstance(res, tuple) and len(res) == 2:
-                columns, rows = res
-                if columns:
-                    result_text = _format_query_result(columns, rows)
-            elif isinstance(res, str):
-                result_text = res
-
-            ai_message = store.add_message(
-                conv_id,
-                role="assistant",
-                content=result.get("explanation", ""),
-                sql=result.get("sql", ""),
-                action=result.get("action", ""),
-                result=result_text,
-            )
-
-        return ai_message
+        return _build_ai_response(conv_id, result)
 
     except Exception as e:
-        ai_message = store.add_message(
+        return store.add_message(
             conv_id,
             role="assistant",
             content="处理请求时发生错误",
             error=str(e),
         )
-        return ai_message
+
+
+def _build_ai_response(conv_id: str, result: dict):
+    """根据执行结果构建 AI 回复消息"""
+    if result["error"]:
+        return store.add_message(
+            conv_id,
+            role="assistant",
+            content=result.get("explanation", "") or result["error"],
+            sql=result.get("sql", ""),
+            action=result.get("action", ""),
+            error=result["error"],
+        )
+
+    result_text = ""
+    res = result.get("result")
+    if isinstance(res, tuple) and len(res) == 2:
+        columns, rows = res
+        if columns:
+            result_text = _format_query_result(columns, rows)
+    elif isinstance(res, str):
+        result_text = res
+
+    return store.add_message(
+        conv_id,
+        role="assistant",
+        content=result.get("explanation", ""),
+        sql=result.get("sql", ""),
+        action=result.get("action", ""),
+        result=result_text,
+    )
 
 
 def _handle_import_file(ag, conv_id: str, plan: dict, file_data: dict, upload_id: str):
-    """处理文件导入操作（从 send_message 中提取）"""
+    """处理文件导入操作"""
     target_table = plan.get("target_table", "").strip()
     target_db = plan.get("target_db", "").strip() or None
 
     if not target_table:
-        # 尝试从 explanation 中提取表名
         match = re.search(
             r'[\u5bfc\u5165|\u5199\u5165|\u589e\u52a0].*?[\u5230|\u8868]\s*[`\'"]?(\w+)[`\'"]?',
             plan.get("explanation", ""),
@@ -421,7 +429,6 @@ def _handle_import_file(ag, conv_id: str, plan: dict, file_data: dict, upload_id
             error="未指定目标表名",
         )
 
-    # 执行导入
     import_result = import_data_to_table(
         db_client=ag.db,
         table_name=target_table,
@@ -430,8 +437,7 @@ def _handle_import_file(ag, conv_id: str, plan: dict, file_data: dict, upload_id
     )
 
     # 清理上传的文件数据
-    if upload_id in upload_storage:
-        del upload_storage[upload_id]
+    upload_storage.pop(upload_id, None)
 
     if import_result["success"]:
         return store.add_message(
@@ -490,7 +496,6 @@ async def upload_file(file: UploadFile = File(...)):
             detail=f"不支持的文件格式: {ext}，支持: {', '.join(SUPPORTED_EXTENSIONS)}"
         )
 
-    # 保存到临时文件
     try:
         tmp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".uploads")
         os.makedirs(tmp_dir, exist_ok=True)
@@ -506,7 +511,7 @@ async def upload_file(file: UploadFile = File(...)):
         # 清理临时文件
         os.remove(tmp_path)
 
-        # 存储解析结果
+        # 存储解析结果（带创建时间用于过期清理）
         upload_id = uuid.uuid4().hex[:12]
         upload_storage[upload_id] = {
             "filename": filename,
@@ -514,6 +519,7 @@ async def upload_file(file: UploadFile = File(...)):
             "rows": parsed["rows"],
             "row_count": parsed["row_count"],
             "preview": parsed["preview"],
+            "created_at": time.time(),
         }
 
         return {
@@ -533,8 +539,7 @@ async def upload_file(file: UploadFile = File(...)):
 @app.delete("/api/upload/{upload_id}")
 def delete_upload(upload_id: str):
     """删除已上传的文件数据"""
-    if upload_id in upload_storage:
-        del upload_storage[upload_id]
+    upload_storage.pop(upload_id, None)
     return {"success": True}
 
 

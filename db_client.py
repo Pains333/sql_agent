@@ -1,8 +1,15 @@
 """
 数据库客户端 - 支持 PostgreSQL、MySQL、Oracle
+统一封装连接管理、SQL 执行、元数据查询
 """
 
+from typing import Optional
+
 import config
+from exceptions import DatabaseConnectionError, DatabaseExecutionError
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class DBClient:
@@ -17,17 +24,6 @@ class DBClient:
         password: str = "",
         database: str = "",
     ):
-        """
-        初始化数据库客户端
-
-        Args:
-            db_type: 数据库类型 postgresql/mysql/oracle
-            host: 数据库主机
-            port: 端口号
-            user: 用户名
-            password: 密码
-            database: 默认数据库名
-        """
         self.db_type = db_type.lower()
         self.host = host or config.PG_HOST
         self.port = port or config.DB_DEFAULT_PORTS.get(self.db_type, 5432)
@@ -47,33 +43,24 @@ class DBClient:
         """检查连接是否已关闭"""
         if self._conn is None:
             return True
-        if self.db_type == "postgresql":
-            return self._conn.closed != 0
-        elif self.db_type == "mysql":
-            try:
-                self._conn.ping(reconnect=False)
-                return False
-            except Exception:
-                return True
-        elif self.db_type == "oracle":
-            try:
-                self._conn.ping()
-                return False
-            except Exception:
-                return True
-        return True
+        try:
+            if self.db_type == "postgresql":
+                return self._conn.closed != 0
+            # MySQL / Oracle 都可以用 ping 检查
+            self._conn.ping(reconnect=False) if self.db_type == "mysql" else self._conn.ping()
+            return False
+        except Exception:
+            return True
 
-    def _connect(self):
+    def _connect(self) -> None:
         """建立数据库连接"""
         try:
             if self.db_type == "postgresql":
                 import psycopg2
                 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
                 self._conn = psycopg2.connect(
-                    host=self.host,
-                    port=self.port,
-                    user=self.user,
-                    password=self.password,
+                    host=self.host, port=self.port,
+                    user=self.user, password=self.password,
                     dbname=self.current_db,
                 )
                 self._conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -81,136 +68,160 @@ class DBClient:
             elif self.db_type == "mysql":
                 import pymysql
                 self._conn = pymysql.connect(
-                    host=self.host,
-                    port=self.port,
-                    user=self.user,
-                    password=self.password,
+                    host=self.host, port=self.port,
+                    user=self.user, password=self.password,
                     database=self.current_db,
-                    autocommit=True,
-                    charset="utf8mb4",
+                    autocommit=True, charset="utf8mb4",
                 )
 
             elif self.db_type == "oracle":
                 import oracledb
                 dsn = f"{self.host}:{self.port}/{self.current_db}"
                 self._conn = oracledb.connect(
-                    user=self.user,
-                    password=self.password,
-                    dsn=dsn,
+                    user=self.user, password=self.password, dsn=dsn,
                 )
                 self._conn.autocommit = True
 
             else:
                 raise ValueError(f"不支持的数据库类型: {self.db_type}")
 
-        except Exception as e:
-            raise ConnectionError(f"无法连接到 {self.db_type}: {e}")
+            logger.info("已连接到 %s (数据库: %s)", self.db_type, self.current_db)
 
-    def close(self):
+        except Exception as e:
+            raise DatabaseConnectionError(f"无法连接到 {self.db_type}: {e}") from e
+
+    def close(self) -> None:
         """关闭数据库连接"""
         if self._conn:
             try:
                 self._conn.close()
+                logger.info("数据库连接已关闭")
             except Exception:
                 pass
             self._conn = None
 
-    def connect_to_db(self, database: str):
+    def connect_to_db(self, database: str) -> None:
         """切换到指定数据库"""
         self.close()
         self.current_db = database
         self._connect()
 
-    def _fetchall(self, sql: str, params=None) -> list:
-        """执行查询并返回所有结果行（自动管理 cursor）"""
+    def _ensure_database(self, database: Optional[str]) -> None:
+        """如果 database 与当前数据库不同，自动切换连接（Oracle 除外）"""
+        if database and database != self.current_db and self.db_type != "oracle":
+            self.connect_to_db(database)
+
+    # ===========================
+    # 统一 Cursor 执行
+    # ===========================
+
+    def _execute_with_cursor(
+        self,
+        sql: str,
+        params: Optional[tuple] = None,
+        *,
+        fetch: bool = False,
+    ):
+        """
+        统一的 cursor 执行模式，自动管理 cursor 生命周期
+
+        Args:
+            sql: SQL 语句
+            params: 参数化查询参数
+            fetch: True 返回 (columns, rows)，False 返回 rowcount
+
+        Returns:
+            fetch=True: (columns, rows) 元组
+            fetch=False: 受影响的行数 (int)
+        """
         cursor = self.conn.cursor()
         try:
-            cursor.execute(sql, params or [])
-            return cursor.fetchall()
+            cursor.execute(sql, params or ())
+            if fetch:
+                if cursor.description:
+                    columns = [desc[0] for desc in cursor.description]
+                    rows = cursor.fetchall()
+                    return columns, rows
+                return [], []
+            return cursor.rowcount
+        except Exception as e:
+            raise DatabaseExecutionError(f"SQL 执行失败: {e}") from e
         finally:
             cursor.close()
 
+    def execute_many(self, sql: str, values_list: list) -> int:
+        """
+        批量执行 SQL（executemany）
+
+        Args:
+            sql: 带占位符的 SQL 语句
+            values_list: 参数列表
+
+        Returns:
+            插入的行数
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.executemany(sql, values_list)
+            return len(values_list)
+        except Exception as e:
+            raise DatabaseExecutionError(f"批量执行失败: {e}") from e
+        finally:
+            cursor.close()
+
+    def _fetchall(self, sql: str, params=None) -> list:
+        """执行查询并返回所有结果行（便捷方法）"""
+        _, rows = self._execute_with_cursor(sql, params, fetch=True)
+        return rows
+
     # ===========================
-    # SQL 执行
+    # SQL 执行（公共 API）
     # ===========================
 
     def execute_query(self, sql_str: str) -> tuple:
         """执行查询 SQL，返回 (columns, rows)"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(sql_str)
-            if cursor.description:
-                columns = [desc[0] for desc in cursor.description]
-                rows = cursor.fetchall()
-                return columns, rows
-            return [], []
-        except Exception as e:
-            raise RuntimeError(f"查询执行失败: {e}")
-        finally:
-            cursor.close()
+        return self._execute_with_cursor(sql_str, fetch=True)
 
     def execute_ddl(self, sql_str: str) -> str:
         """执行 DDL 语句"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(sql_str)
-            return "执行成功"
-        except Exception as e:
-            raise RuntimeError(f"DDL 执行失败: {e}")
-        finally:
-            cursor.close()
+        self._execute_with_cursor(sql_str)
+        return "执行成功"
 
     def execute_dml(self, sql_str: str) -> str:
-        """执行 DML 语句"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(sql_str)
-            rowcount = cursor.rowcount
-            return f"执行成功，影响了 {rowcount} 行"
-        except Exception as e:
-            raise RuntimeError(f"DML 执行失败: {e}")
-        finally:
-            cursor.close()
+        """执行 DML 语句，返回受影响行数"""
+        rowcount = self._execute_with_cursor(sql_str)
+        return f"执行成功，影响了 {rowcount} 行"
 
     # ===========================
-    # 元数据查询（按数据库类型切换）
+    # 元数据查询
     # ===========================
 
     def list_databases(self) -> list:
         """列出所有数据库"""
-        if self.db_type == "postgresql":
-            _, rows = self.execute_query(
-                "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname;"
-            )
-        elif self.db_type == "mysql":
-            _, rows = self.execute_query("SHOW DATABASES;")
-        elif self.db_type == "oracle":
-            # Oracle 通常不列出多个 DB，而是列出 schema
-            _, rows = self.execute_query(
-                "SELECT username FROM all_users ORDER BY username"
-            )
-        else:
+        queries = {
+            "postgresql": "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname;",
+            "mysql": "SHOW DATABASES;",
+            "oracle": "SELECT username FROM all_users ORDER BY username",
+        }
+        sql = queries.get(self.db_type)
+        if not sql:
             return []
+        _, rows = self.execute_query(sql)
         return [row[0] for row in rows]
 
     def list_tables(self, database: str = None) -> list:
         """列出指定数据库中的所有用户表"""
-        if database and database != self.current_db:
-            if self.db_type != "oracle":
-                self.connect_to_db(database)
+        self._ensure_database(database)
 
-        if self.db_type == "postgresql":
-            _, rows = self.execute_query(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
-            )
-        elif self.db_type == "mysql":
-            _, rows = self.execute_query("SHOW TABLES;")
-        elif self.db_type == "oracle":
-            _, rows = self.execute_query(
-                "SELECT table_name FROM user_tables ORDER BY table_name"
-            )
-        else:
+        queries = {
+            "postgresql": "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;",
+            "mysql": "SHOW TABLES;",
+            "oracle": "SELECT table_name FROM user_tables ORDER BY table_name",
+        }
+        sql = queries.get(self.db_type)
+        if not sql:
             return []
+        _, rows = self.execute_query(sql)
         return [row[0] for row in rows]
 
     def describe_table(self, table_name: str, database: str = None) -> list:
@@ -220,22 +231,19 @@ class DBClient:
         Returns:
             [(column_name, data_type, constraints), ...]
         """
-        if database and database != self.current_db:
-            if self.db_type != "oracle":
-                self.connect_to_db(database)
+        self._ensure_database(database)
 
-        if self.db_type == "postgresql":
-            return self._describe_table_pg(table_name)
-        elif self.db_type == "mysql":
-            return self._describe_table_mysql(table_name)
-        elif self.db_type == "oracle":
-            return self._describe_table_oracle(table_name)
-        return []
+        describe_methods = {
+            "postgresql": self._describe_table_pg,
+            "mysql": self._describe_table_mysql,
+            "oracle": self._describe_table_oracle,
+        }
+        method = describe_methods.get(self.db_type)
+        return method(table_name) if method else []
 
     # --- PostgreSQL 表结构查询 ---
 
     def _describe_table_pg(self, table_name: str) -> list:
-        # 字段信息
         columns_info = self._fetchall("""
             SELECT c.column_name, c.data_type, c.character_maximum_length,
                    c.numeric_precision, c.numeric_scale, c.is_nullable, c.column_default,
@@ -250,21 +258,18 @@ class DBClient:
             ORDER BY c.ordinal_position;
         """, (table_name,))
 
-        # 主键
         pk_columns = {row[0] for row in self._fetchall("""
             SELECT kcu.column_name FROM information_schema.table_constraints tc
             JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
             WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY';
         """, (table_name,))}
 
-        # 唯一约束
         unique_columns = {row[0] for row in self._fetchall("""
             SELECT kcu.column_name FROM information_schema.table_constraints tc
             JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
             WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'UNIQUE';
         """, (table_name,))}
 
-        # 外键
         fk_info = {row[0]: f"REFERENCES {row[1]}({row[2]})" for row in self._fetchall("""
             SELECT kcu.column_name, ccu.table_name, ccu.column_name
             FROM information_schema.table_constraints tc
@@ -293,29 +298,29 @@ class DBClient:
     # --- MySQL 表结构查询 ---
 
     def _describe_table_mysql(self, table_name: str) -> list:
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(f"DESCRIBE `{table_name}`;")
-            rows = cursor.fetchall()
-        finally:
-            cursor.close()
+        columns_info = self._fetchall("""
+            SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY,
+                   COLUMN_DEFAULT, EXTRA
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s
+            ORDER BY ORDINAL_POSITION;
+        """, (table_name,))
 
         result = []
-        for row in rows:
-            col_name = row[0]
-            col_type = row[1].upper()
+        for row in columns_info:
+            col_name, col_type, is_nullable, column_key, column_default, extra = row[:6]
             constraints = []
-            if row[3] == "PRI":
+            if column_key == "PRI":
                 constraints.append("PRIMARY KEY")
-            if row[3] == "UNI":
+            if column_key == "UNI":
                 constraints.append("UNIQUE")
-            if row[2] == "NO" and row[3] != "PRI":
+            if is_nullable == "NO" and column_key != "PRI":
                 constraints.append("NOT NULL")
-            if row[4] is not None:
-                constraints.append(f"DEFAULT {row[4]}")
-            if row[5]:
-                constraints.append(row[5].upper())
-            result.append((col_name, col_type, ", ".join(constraints) if constraints else ""))
+            if column_default is not None:
+                constraints.append(f"DEFAULT {column_default}")
+            if extra:
+                constraints.append(extra.upper())
+            result.append((col_name, col_type.upper(), ", ".join(constraints) if constraints else ""))
         return result
 
     # --- Oracle 表结构查询 ---
@@ -326,7 +331,6 @@ class DBClient:
             FROM user_tab_columns WHERE table_name = :1 ORDER BY column_id
         """, [table_name.upper()])
 
-        # 主键
         pk_columns = {row[0] for row in self._fetchall("""
             SELECT cols.column_name FROM all_constraints cons
             JOIN all_cons_columns cols ON cons.constraint_name = cols.constraint_name
@@ -335,13 +339,7 @@ class DBClient:
 
         result = []
         for col in columns_info:
-            col_name = col[0]
-            data_type = col[1]
-            data_length = col[2]
-            precision = col[3]
-            scale = col[4]
-            nullable = col[5]
-            default = col[6]
+            col_name, data_type, data_length, precision, scale, nullable, default = col[:7]
 
             if precision is not None and data_type == "NUMBER":
                 full_type = f"NUMBER({precision},{scale or 0})"

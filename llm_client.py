@@ -5,7 +5,16 @@ LLM 客户端 - 支持 Ollama 本地模型和 OpenAI 兼容 API
 import json
 import re
 import requests
+
 import config
+from exceptions import LLMConnectionError, LLMTimeoutError, LLMResponseError
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+
+# 对话历史最大条数（超出后保留最近的部分）
+MAX_HISTORY_MESSAGES = 20
+HISTORY_TRIM_TO = 16
 
 
 class LLMClient:
@@ -18,19 +27,10 @@ class LLMClient:
         model: str = "",
         api_key: str = "",
     ):
-        """
-        初始化 LLM 客户端
-
-        Args:
-            mode: "local" (Ollama) 或 "api" (OpenAI 兼容)
-            base_url: API 地址
-            model: 模型名称
-            api_key: API Key (仅 api 模式)
-        """
         self.mode = mode
         self.timeout = config.LLM_REQUEST_TIMEOUT
         self.temperature = config.LLM_TEMPERATURE
-        self.conversation_history = []
+        self.conversation_history: list[dict] = []
 
         if mode == "local":
             self.base_url = base_url or config.OLLAMA_BASE_URL
@@ -41,11 +41,11 @@ class LLMClient:
             self.model = model
             self.api_key = api_key
 
-    def reset_history(self):
+    def reset_history(self) -> None:
         """重置对话历史"""
         self.conversation_history = []
 
-    def _build_messages(self, user_message: str, system_prompt: str) -> list:
+    def _build_messages(self, user_message: str, system_prompt: str) -> list[dict]:
         """构建包含系统提示、历史记录和用户消息的消息列表"""
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.conversation_history)
@@ -62,91 +62,58 @@ class LLMClient:
 
         Returns:
             模型回复的文本
+
+        Raises:
+            LLMConnectionError: 无法连接到 LLM 服务
+            LLMTimeoutError: 请求超时
+            LLMResponseError: 响应格式异常
         """
+        messages = self._build_messages(user_message, system_prompt)
+
         if self.mode == "local":
-            return self._chat_ollama(user_message, system_prompt)
+            url = f"{self.base_url}/api/chat"
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "stream": False,
+                "options": {"temperature": self.temperature},
+            }
+            extract = lambda r: r.get("message", {}).get("content", "")
+            service_name = f"Ollama ({self.base_url})"
         else:
-            return self._chat_openai(user_message, system_prompt)
-
-    def _chat_ollama(self, user_message: str, system_prompt: str) -> str:
-        """Ollama 本地模型调用"""
-        messages = self._build_messages(user_message, system_prompt)
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
-            "options": {
+            url = f"{self.base_url}/v1/chat/completions"
+            headers = {"Content-Type": "application/json"}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            payload = {
+                "model": self.model,
+                "messages": messages,
                 "temperature": self.temperature,
-            },
-        }
+            }
+            extract = lambda r: r["choices"][0]["message"]["content"]
+            service_name = self.base_url
 
         try:
             response = requests.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                timeout=self.timeout,
+                url, json=payload, headers=headers, timeout=self.timeout,
             )
             response.raise_for_status()
             result = response.json()
-            assistant_message = result.get("message", {}).get("content", "")
+            assistant_message = extract(result)
             self._save_history(user_message, assistant_message)
             return assistant_message
 
         except requests.exceptions.ConnectionError:
-            raise ConnectionError(
-                "无法连接到 Ollama 服务。请确保 Ollama 正在运行 (ollama serve)"
-            )
+            raise LLMConnectionError(f"无法连接到服务: {service_name}")
         except requests.exceptions.Timeout:
-            raise TimeoutError(
-                f"Ollama 请求超时 ({self.timeout}s)。模型可能正在加载，请稍后重试。"
-            )
+            raise LLMTimeoutError(f"请求超时 ({self.timeout}s)")
         except requests.exceptions.HTTPError as e:
-            raise RuntimeError(f"Ollama API 错误: {e}")
-
-    def _chat_openai(self, user_message: str, system_prompt: str) -> str:
-        """OpenAI 兼容 API 调用"""
-        messages = self._build_messages(user_message, system_prompt)
-
-        headers = {
-            "Content-Type": "application/json",
-        }
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-        }
-
-        try:
-            response = requests.post(
-                f"{self.base_url}/v1/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-            result = response.json()
-            assistant_message = result["choices"][0]["message"]["content"]
-            self._save_history(user_message, assistant_message)
-            return assistant_message
-
-        except requests.exceptions.ConnectionError:
-            raise ConnectionError(
-                f"无法连接到 API 服务: {self.base_url}"
-            )
-        except requests.exceptions.Timeout:
-            raise TimeoutError(
-                f"API 请求超时 ({self.timeout}s)"
-            )
-        except requests.exceptions.HTTPError as e:
-            raise RuntimeError(f"API 错误: {e}")
+            raise LLMResponseError(f"API 错误: {e}") from e
         except (KeyError, IndexError) as e:
-            raise RuntimeError(f"API 响应格式异常: {e}")
+            raise LLMResponseError(f"响应格式异常: {e}") from e
 
-    def _save_history(self, user_message: str, assistant_message: str):
+    def _save_history(self, user_message: str, assistant_message: str) -> None:
         """保存对话历史"""
         self.conversation_history.append(
             {"role": "user", "content": user_message}
@@ -154,9 +121,8 @@ class LLMClient:
         self.conversation_history.append(
             {"role": "assistant", "content": assistant_message}
         )
-        # 限制历史长度
-        if len(self.conversation_history) > 20:
-            self.conversation_history = self.conversation_history[-16:]
+        if len(self.conversation_history) > MAX_HISTORY_MESSAGES:
+            self.conversation_history = self.conversation_history[-HISTORY_TRIM_TO:]
 
     def parse_json_response(self, response_text: str) -> dict:
         """
@@ -190,6 +156,7 @@ class LLMClient:
                     continue
 
         # 如果都无法解析，返回一个默认结构
+        logger.warning("无法从 LLM 回复中解析 JSON，使用 chat 回退: %s", response_text[:200])
         return {
             "action": "chat",
             "sql": "",
