@@ -11,6 +11,13 @@ export interface Message {
   action?: string;
   result?: string;
   error?: string;
+  status?: 'pending' | 'executed' | 'cancelled';
+  plan?: {
+    action: string;
+    sql: string;
+    explanation: string;
+    target_db?: string;
+  };
 }
 
 export interface Conversation {
@@ -67,4 +74,24 @@ export interface UploadResult {
   columns: string[];
   row_count: number;
   preview: Record<string, unknown>[];
+}
+
+export interface HealthStatus {
+  db_connected: boolean;
+  llm_connected: boolean;
+  current_db: string;
+}
+
+export interface TableColumn {
+  name: string;
+  type: string;
+  constraints: string;
+}
+
+export interface PaginatedResult {
+  columns: string[];
+  rows: unknown[][];
+  total: number;
+  page: number;
+  page_size: number;
 }

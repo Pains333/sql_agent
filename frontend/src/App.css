@@ -1,8 +1,134 @@
 /* ============================================
-   Global Styles — Refined Light Theme
+   Global Styles — Theming with CSS Variables
    ============================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ---- Light Theme (default) ---- */
+:root {
+  --bg-primary: #f5f6fa;
+  --bg-surface: #ffffff;
+  --bg-surface-secondary: #f8f9fb;
+  --bg-surface-hover: #f0f1f5;
+  --bg-inset: #f3f4f6;
+  --bg-overlay: rgba(245, 246, 250, 0.92);
+
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  --text-faint: #c4c7cc;
+
+  --border: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.1);
+
+  --accent: #6366f1;
+  --accent-hover: #8b5cf6;
+  --accent-bg: rgba(99, 102, 241, 0.06);
+  --accent-bg-strong: rgba(99, 102, 241, 0.12);
+  --accent-border: rgba(99, 102, 241, 0.12);
+  --accent-shadow: rgba(99, 102, 241, 0.2);
+
+  --success: #10b981;
+  --success-deep: #059669;
+  --success-bg: rgba(16, 185, 129, 0.06);
+  --success-shadow: rgba(16, 185, 129, 0.2);
+
+  --error: #dc2626;
+  --error-bg: rgba(239, 68, 68, 0.05);
+  --error-border: rgba(239, 68, 68, 0.1);
+  --error-hover-bg: rgba(239, 68, 68, 0.06);
+
+  --warning: #b45309;
+  --warning-bg: rgba(245, 158, 11, 0.05);
+  --warning-border: rgba(245, 158, 11, 0.1);
+
+  --sql-bg: #1a1b2e;
+  --sql-header-bg: rgba(255, 255, 255, 0.04);
+  --sql-header-text: #7c7f96;
+  --sql-text: #a5b4fc;
+  --sql-border: rgba(255, 255, 255, 0.06);
+
+  --bubble-user-from: #6366f1;
+  --bubble-user-to: #8b5cf6;
+  --bubble-ai-bg: #ffffff;
+  --bubble-ai-border: rgba(0, 0, 0, 0.05);
+
+  --input-bg: #ffffff;
+  --input-border: rgba(0, 0, 0, 0.07);
+  --input-placeholder: #b0b3ba;
+  --input-disabled-bg: #e8e9ee;
+
+  --scrollbar: rgba(0, 0, 0, 0.08);
+  --scrollbar-hover: rgba(0, 0, 0, 0.15);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 24px 80px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+/* ---- Dark Theme ---- */
+[data-theme="dark"] {
+  --bg-primary: #0f1117;
+  --bg-surface: #1a1b2e;
+  --bg-surface-secondary: #1e1f35;
+  --bg-surface-hover: #252640;
+  --bg-inset: #151627;
+  --bg-overlay: rgba(15, 17, 23, 0.92);
+
+  --text-primary: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-faint: #4b5563;
+
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+
+  --accent: #818cf8;
+  --accent-hover: #a78bfa;
+  --accent-bg: rgba(129, 140, 248, 0.1);
+  --accent-bg-strong: rgba(129, 140, 248, 0.18);
+  --accent-border: rgba(129, 140, 248, 0.15);
+  --accent-shadow: rgba(129, 140, 248, 0.25);
+
+  --success: #34d399;
+  --success-deep: #10b981;
+  --success-bg: rgba(52, 211, 153, 0.1);
+  --success-shadow: rgba(52, 211, 153, 0.2);
+
+  --error: #f87171;
+  --error-bg: rgba(248, 113, 113, 0.08);
+  --error-border: rgba(248, 113, 113, 0.15);
+  --error-hover-bg: rgba(248, 113, 113, 0.12);
+
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.08);
+  --warning-border: rgba(251, 191, 36, 0.15);
+
+  --sql-bg: #0d0e1a;
+  --sql-header-bg: rgba(255, 255, 255, 0.03);
+  --sql-header-text: #6b6e85;
+  --sql-text: #c4b5fd;
+  --sql-border: rgba(255, 255, 255, 0.04);
+
+  --bubble-user-from: #6366f1;
+  --bubble-user-to: #7c3aed;
+  --bubble-ai-bg: #1e1f35;
+  --bubble-ai-border: rgba(255, 255, 255, 0.06);
+
+  --input-bg: #1e1f35;
+  --input-border: rgba(255, 255, 255, 0.08);
+  --input-placeholder: #6b7280;
+  --input-disabled-bg: #252640;
+
+  --scrollbar: rgba(255, 255, 255, 0.06);
+  --scrollbar-hover: rgba(255, 255, 255, 0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 24px 80px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.2);
+}
 
 *,
 *::before,
@@ -20,8 +146,8 @@ html, body, #root {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #f5f6fa;
-  color: #1f2937;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -31,13 +157,13 @@ body {
   display: flex;
   height: 100vh;
   width: 100vw;
-  background: #f5f6fa;
+  background: var(--bg-primary);
 }
 
 /* Selection */
 ::selection {
-  background: rgba(99, 102, 241, 0.18);
-  color: #312e81;
+  background: var(--accent-bg-strong);
+  color: var(--accent);
 }
 
 /* Scrollbar global */
@@ -50,12 +176,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--scrollbar);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--scrollbar-hover);
 }
 
 /* App Loading */
@@ -65,18 +191,37 @@ body {
   justify-content: center;
   height: 100vh;
   width: 100vw;
-  background: #f5f6fa;
+  background: var(--bg-primary);
 }
 
 .loading-spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid rgba(99, 102, 241, 0.12);
-  border-top-color: #6366f1;
+  border: 3px solid var(--accent-bg);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ---- Responsive: Sidebar overlay on mobile ---- */
+@media (max-width: 768px) {
+  .app-layout {
+    position: relative;
+  }
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 99;
+    animation: fadeIn 0.2s ease;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

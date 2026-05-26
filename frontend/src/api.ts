@@ -2,7 +2,7 @@
    API Client — wraps all backend REST calls
    ============================================ */
 
-import type { Conversation, ConversationSummary, Message, OllamaModel, SetupConfig, SetupResult, UploadResult } from './types';
+import type { Conversation, ConversationSummary, Message, OllamaModel, SetupConfig, SetupResult, UploadResult, DatabaseInfo, HealthStatus, TableColumn, PaginatedResult } from './types';
 
 const BASE = '/api';
 
@@ -69,6 +69,135 @@ export async function sendMessage(convId: string, content: string, uploadId?: st
   });
 }
 
+/* --- SQL Execution (two-phase) --- */
+
+export async function executeSQL(
+  convId: string,
+  sql: string,
+  action: string,
+  messageId: string,
+  targetDb?: string,
+): Promise<Message> {
+  return request<Message>(`/conversations/${convId}/execute`, {
+    method: 'POST',
+    body: JSON.stringify({ sql, action, message_id: messageId, target_db: targetDb }),
+  });
+}
+
+export async function cancelExecution(convId: string, messageId: string): Promise<void> {
+  await request(`/conversations/${convId}/cancel/${messageId}`, { method: 'POST' });
+}
+
+/* --- Streaming Messages (SSE) --- */
+
+export function sendMessageStream(
+  convId: string,
+  content: string,
+  uploadId: string | undefined,
+  callbacks: {
+    onThinking: (token: string) => void;
+    onPlan: (plan: Message) => void;
+    onResult: (msg: Message) => void;
+    onError: (err: string) => void;
+    onDone: () => void;
+  },
+): AbortController {
+  const controller = new AbortController();
+
+  fetch(`${BASE}/conversations/${convId}/messages/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, upload_id: uploadId }),
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        callbacks.onError(body.detail || `HTTP ${res.status}`);
+        callbacks.onDone();
+        return;
+      }
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let eventType = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith('data: ') && eventType) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (eventType === 'thinking') callbacks.onThinking(data.token || '');
+              else if (eventType === 'plan') callbacks.onPlan(data);
+              else if (eventType === 'result') callbacks.onResult(data);
+              else if (eventType === 'error') callbacks.onError(data.message || 'Unknown error');
+              else if (eventType === 'done') callbacks.onDone();
+            } catch {
+              /* skip malformed JSON */
+            }
+            eventType = '';
+          } else if (line === '') {
+            eventType = '';
+          }
+        }
+      }
+      callbacks.onDone();
+    })
+    .catch((err) => {
+      if (err.name !== 'AbortError') {
+        callbacks.onError(err.message || 'Connection failed');
+        callbacks.onDone();
+      }
+    });
+
+  return controller;
+}
+
+/* --- Databases --- */
+
+export async function listDatabases(): Promise<DatabaseInfo> {
+  return request<DatabaseInfo>('/databases');
+}
+
+export async function switchDatabase(database: string): Promise<{ success: boolean; message: string; current: string }> {
+  return request('/databases/switch', {
+    method: 'POST',
+    body: JSON.stringify({ database }),
+  });
+}
+
+export async function listTables(db: string): Promise<{ database: string; tables: string[] }> {
+  return request(`/databases/${encodeURIComponent(db)}/tables`);
+}
+
+export async function describeTable(db: string, table: string): Promise<{ database: string; table: string; columns: TableColumn[] }> {
+  return request(`/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}`);
+}
+
+/* --- Health --- */
+
+export async function healthCheck(): Promise<HealthStatus> {
+  return request<HealthStatus>('/health');
+}
+
+/* --- Query Pagination --- */
+
+export async function paginateQuery(sql: string, page: number, pageSize: number): Promise<PaginatedResult> {
+  return request<PaginatedResult>('/query/paginate', {
+    method: 'POST',
+    body: JSON.stringify({ sql, page, page_size: pageSize }),
+  });
+}
+
 /* --- File Upload --- */
 
 export async function uploadFile(file: File): Promise<UploadResult> {
@@ -78,7 +207,6 @@ export async function uploadFile(file: File): Promise<UploadResult> {
   const res = await fetch(`${BASE}/upload`, {
     method: 'POST',
     body: formData,
-    // Don't set Content-Type — browser sets it with boundary for multipart
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

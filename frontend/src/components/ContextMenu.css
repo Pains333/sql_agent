@@ -2,25 +2,17 @@
   position: fixed;
   z-index: 1000;
   min-width: 152px;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 5px;
-  box-shadow:
-    0 8px 30px rgba(0, 0, 0, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-lg);
   animation: contextFadeIn 0.15s ease-out;
 }
 
 @keyframes contextFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .context-menu-item {
@@ -31,7 +23,7 @@
   padding: 9px 14px;
   background: none;
   border: none;
-  color: #4b5563;
+  color: var(--text-secondary);
   font-size: 13px;
   font-family: 'Inter', sans-serif;
   cursor: pointer;
@@ -40,12 +32,12 @@
 }
 
 .context-menu-item:hover {
-  background: #f5f6f8;
+  background: var(--bg-surface-hover);
 }
 
 .context-menu-item.danger:hover {
-  background: rgba(239, 68, 68, 0.06);
-  color: #dc2626;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .context-menu-icon {

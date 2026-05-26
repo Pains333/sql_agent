@@ -22,6 +22,22 @@ export default function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  /* ---- Apply theme ---- */
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  }
 
   /* ---- Check setup status on mount (with retry) ---- */
   useEffect(() => {
@@ -34,13 +50,11 @@ export default function App() {
           if (!cancelled) setSetupDone(res.setup_done);
           return;
         } catch {
-          // Backend might not be ready yet, wait and retry
           if (i < maxRetries - 1) {
             await new Promise((r) => setTimeout(r, 2000));
           }
         }
       }
-      // All retries failed
       if (!cancelled) setSetupDone(false);
     }
     checkStatus();
@@ -96,6 +110,10 @@ export default function App() {
   /* ---- Select conversation ---- */
   function handleSelect(id: string) {
     loadConversation(id);
+    // Auto-close sidebar on mobile
+    if (window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
   }
 
   /* ---- Delete conversation ---- */
@@ -132,7 +150,6 @@ export default function App() {
   async function handleLogout() {
     try {
       await resetSetup();
-      // Reset all frontend state
       setSetupDone(false);
       setActiveId(null);
       setActiveConv(null);
@@ -159,6 +176,10 @@ export default function App() {
   // Main app
   return (
     <div className="app-layout">
+      {/* Mobile overlay */}
+      {sidebarOpen && window.innerWidth <= 768 && (
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
       <Sidebar
         conversations={conversations}
         activeId={activeId}
@@ -166,11 +187,17 @@ export default function App() {
         onNew={handleNew}
         onDelete={handleDelete}
         onLogout={handleLogout}
+        collapsed={!sidebarOpen}
+        onToggleCollapse={() => setSidebarOpen(!sidebarOpen)}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
       <ChatArea
         conversation={activeConv}
         onMessageSent={handleMessageSent}
         onAutoCreate={handleAutoCreate}
+        sidebarCollapsed={!sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
       />
     </div>
   );

@@ -54,7 +54,7 @@ const texts = {
   'chat.placeholder': { zh: '描述你的数据库操作需求...', en: 'Describe your database operation...' },
   'chat.placeholderWithFile': { zh: '描述如何处理附件数据，如: 将附件数据导入到 users 表...', en: 'Describe how to handle the attachment, e.g.: Import attachment data into users table...' },
   'chat.send': { zh: '发送', en: 'Send' },
-  'chat.inputHint': { zh: '按 Enter 发送，Shift + Enter 换行', en: 'Press Enter to send, Shift + Enter for new line' },
+  'chat.inputHint': { zh: '按 Enter 发送，Shift + Enter 换行，输入 / 查看命令', en: 'Enter to send, Shift+Enter for newline, type / for commands' },
   'chat.welcome': { zh: '输入你的需求，开始对话', en: 'Type your request to start' },
   'chat.example1': { zh: '帮我创建一个用户信息表', en: 'Create a user information table' },
   'chat.example2': { zh: '查看所有表的数据', en: 'Show all table data' },
@@ -74,6 +74,54 @@ const texts = {
   'sidebar.minutesAgo': { zh: '分钟前', en: 'min ago' },
   'sidebar.hoursAgo': { zh: '小时前', en: 'hr ago' },
   'sidebar.daysAgo': { zh: '天前', en: 'd ago' },
+  'sidebar.collapse': { zh: '折叠侧栏', en: 'Collapse sidebar' },
+  'sidebar.expand': { zh: '展开侧栏', en: 'Expand sidebar' },
+
+  // Theme
+  'theme.light': { zh: '浅色模式', en: 'Light Mode' },
+  'theme.dark': { zh: '深色模式', en: 'Dark Mode' },
+
+  // Database
+  'db.current': { zh: '当前数据库', en: 'Current Database' },
+  'db.switch': { zh: '切换数据库', en: 'Switch Database' },
+  'db.switchSuccess': { zh: '已切换到数据库', en: 'Switched to database' },
+  'db.switchFailed': { zh: '切换失败', en: 'Switch failed' },
+
+  // Schema Browser
+  'schema.title': { zh: '数据库结构', en: 'Schema Browser' },
+  'schema.tables': { zh: '表', en: 'Tables' },
+  'schema.columns': { zh: '列', en: 'Columns' },
+  'schema.noTables': { zh: '暂无表', en: 'No tables' },
+  'schema.loading': { zh: '加载中...', en: 'Loading...' },
+
+  // SQL Edit / DDL Confirmation
+  'sql.execute': { zh: '执行', en: 'Execute' },
+  'sql.cancel': { zh: '取消', en: 'Cancel' },
+  'sql.edit': { zh: '编辑 SQL', en: 'Edit SQL' },
+  'sql.confirmDDL': { zh: '此操作将修改数据库结构，请确认', en: 'This will modify the database structure, please confirm' },
+  'sql.dangerWarning': { zh: '危险操作！此操作不可撤销', en: 'Dangerous operation! This cannot be undone' },
+  'sql.cancelled': { zh: '操作已取消', en: 'Operation cancelled' },
+  'sql.executing': { zh: '执行中...', en: 'Executing...' },
+
+  // Export
+  'export.csv': { zh: '导出 CSV', en: 'Export CSV' },
+
+  // Connection Status
+  'status.dbConnected': { zh: '数据库已连接', en: 'Database connected' },
+  'status.dbDisconnected': { zh: '数据库未连接', en: 'Database disconnected' },
+  'status.llmConnected': { zh: '模型已连接', en: 'Model connected' },
+  'status.llmDisconnected': { zh: '模型未连接', en: 'Model disconnected' },
+
+  // Commands
+  'cmd.tables': { zh: '查看所有表', en: 'Show all tables' },
+  'cmd.databases': { zh: '查看所有数据库', en: 'Show all databases' },
+  'cmd.describe': { zh: '查看表结构', en: 'Describe table structure' },
+  'cmd.clear': { zh: '清空当前对话', en: 'Clear current conversation' },
+
+  // Pagination
+  'pagination.prev': { zh: '上一页', en: 'Previous' },
+  'pagination.next': { zh: '下一页', en: 'Next' },
+  'pagination.page': { zh: '页', en: 'Page' },
 
   // Errors
   'error.title': { zh: '错误', en: 'Error' },

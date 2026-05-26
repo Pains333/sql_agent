@@ -113,6 +113,80 @@ class LLMClient:
         except (KeyError, IndexError) as e:
             raise LLMResponseError(f"响应格式异常: {e}") from e
 
+    def chat_stream(self, user_message: str, system_prompt: str):
+        """
+        流式发送消息并逐 token 返回回复
+
+        Yields:
+            str: 每个 token 片段
+
+        最终通过 _save_history 保存完整对话。
+        """
+        messages = self._build_messages(user_message, system_prompt)
+        full_response = ""
+
+        try:
+            if self.mode == "local":
+                url = f"{self.base_url}/api/chat"
+                payload = {
+                    "model": self.model,
+                    "messages": messages,
+                    "stream": True,
+                    "options": {"temperature": self.temperature},
+                }
+                response = requests.post(
+                    url, json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=self.timeout, stream=True,
+                )
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if line:
+                        data = json.loads(line)
+                        token = data.get("message", {}).get("content", "")
+                        if token:
+                            full_response += token
+                            yield token
+                        if data.get("done"):
+                            break
+            else:
+                url = f"{self.base_url}/v1/chat/completions"
+                headers = {"Content-Type": "application/json"}
+                if self.api_key:
+                    headers["Authorization"] = f"Bearer {self.api_key}"
+                payload = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": self.temperature,
+                    "stream": True,
+                }
+                response = requests.post(
+                    url, json=payload, headers=headers,
+                    timeout=self.timeout, stream=True,
+                )
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if line:
+                        line_str = line.decode("utf-8")
+                        if line_str.startswith("data: ") and line_str.strip() != "data: [DONE]":
+                            try:
+                                data = json.loads(line_str[6:])
+                                token = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                if token:
+                                    full_response += token
+                                    yield token
+                            except json.JSONDecodeError:
+                                continue
+
+            self._save_history(user_message, full_response)
+
+        except requests.exceptions.ConnectionError:
+            raise LLMConnectionError(f"无法连接到服务")
+        except requests.exceptions.Timeout:
+            raise LLMTimeoutError(f"请求超时 ({self.timeout}s)")
+        except requests.exceptions.HTTPError as e:
+            raise LLMResponseError(f"API 错误: {e}") from e
+
     def _save_history(self, user_message: str, assistant_message: str) -> None:
         """保存对话历史"""
         self.conversation_history.append(
