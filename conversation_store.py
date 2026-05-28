@@ -111,6 +111,8 @@ class ConversationStore:
         action: str = "",
         result: str = "",
         error: str = "",
+        status: str = "",
+        plan: Optional[dict] = None,
     ) -> Optional[dict]:
         """
         向对话添加消息
@@ -123,6 +125,8 @@ class ConversationStore:
             action: 操作类型（仅 assistant）
             result: 执行结果（仅 assistant）
             error: 错误信息
+            status: 消息状态 (pending/executed/cancelled)
+            plan: 执行计划字典 (用于两阶段执行)
 
         Returns:
             添加的消息对象
@@ -141,6 +145,10 @@ class ConversationStore:
             message["result"] = result
         if error:
             message["error"] = error
+        if status:
+            message["status"] = status
+        if plan:
+            message["plan"] = plan
 
         def updater(conversation):
             conversation["messages"].append(message)
@@ -151,6 +159,55 @@ class ConversationStore:
                     title += "..."
                 conversation["title"] = title
             return message
+
+        return self._update_conversation(conv_id, updater)
+
+    def get_message(self, conv_id: str, message_id: str) -> Optional[dict]:
+        """
+        获取单条消息
+
+        Args:
+            conv_id: 对话 ID
+            message_id: 消息 ID
+
+        Returns:
+            消息对象，不存在则返回 None
+        """
+        conversation = self.get_conversation(conv_id)
+        if conversation is None:
+            return None
+        for msg in conversation.get("messages", []):
+            if msg["id"] == message_id:
+                return msg
+        return None
+
+    def update_message_status(
+        self,
+        conv_id: str,
+        message_id: str,
+        status: str,
+        **updates,
+    ) -> Optional[dict]:
+        """
+        更新消息状态（用于两阶段执行的确认/取消）
+
+        Args:
+            conv_id: 对话 ID
+            message_id: 消息 ID
+            status: 新状态 (executed/cancelled)
+            **updates: 其他要更新的字段 (result, error 等)
+
+        Returns:
+            更新后的消息对象
+        """
+        def updater(conversation):
+            for msg in conversation.get("messages", []):
+                if msg["id"] == message_id:
+                    msg["status"] = status
+                    for key, value in updates.items():
+                        msg[key] = value
+                    return msg
+            return None
 
         return self._update_conversation(conv_id, updater)
 

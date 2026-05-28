@@ -8,14 +8,16 @@ from contextlib import asynccontextmanager
 import requests
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 
-from agent import SQLAgent
+from agent import SQLAgent, DDL_ACTIONS
 from conversation_store import ConversationStore
 from file_parser import parse_file, SUPPORTED_EXTENSIONS
 from data_importer import import_data_to_table
 from skill_manager import DEFAULT_SKILL_CONTENT
+from prompts import build_system_prompt
 from logging_config import get_logger, setup_logging
 import config
 
@@ -155,6 +157,23 @@ class ConversationCreate(BaseModel):
 
 class TitleUpdate(BaseModel):
     title: str
+
+
+class SwitchDatabaseRequest(BaseModel):
+    database: str
+
+
+class ExecuteRequest(BaseModel):
+    sql: str
+    action: str
+    message_id: str
+    target_db: Optional[str] = None
+
+
+class PaginateRequest(BaseModel):
+    sql: str
+    page: int = 1
+    page_size: int = 50
 
 
 # === Setup API ===
@@ -469,6 +488,309 @@ def list_databases():
         return {"databases": databases, "current": current}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/databases/switch")
+def switch_database(req: SwitchDatabaseRequest):
+    """切换当前数据库"""
+    ag = _require_agent()
+    try:
+        ag.db.connect_to_db(req.database)
+        # 重新扫描数据库结构
+        ag.scan_all_databases()
+        return {
+            "success": True,
+            "message": f"已切换到 {req.database}",
+            "current": ag.db.current_db,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/databases/{db}/tables")
+def get_tables(db: str):
+    """获取指定数据库的表列表"""
+    ag = _require_agent()
+    try:
+        tables = ag.db.list_tables(db)
+        return {"database": db, "tables": tables}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/databases/{db}/tables/{table}")
+def describe_table_endpoint(db: str, table: str):
+    """获取表结构详情"""
+    ag = _require_agent()
+    try:
+        columns = ag.db.describe_table(table, db)
+        return {
+            "database": db,
+            "table": table,
+            "columns": [
+                {"name": c[0], "type": c[1], "constraints": c[2]}
+                for c in columns
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/health")
+def health_check():
+    """健康检查：返回数据库和 LLM 连接状态"""
+    ag_instance = agent
+    if ag_instance is None:
+        return {"db_connected": False, "llm_connected": False, "current_db": ""}
+
+    # 检查数据库连接
+    db_ok = False
+    try:
+        db_ok = not ag_instance.db._is_closed()
+    except Exception:
+        pass
+
+    # 检查 LLM 连接
+    llm_ok = False
+    try:
+        if ag_instance.llm.mode == "local":
+            r = requests.get(f"{ag_instance.llm.base_url}/api/tags", timeout=3)
+            llm_ok = r.status_code == 200
+        else:
+            headers = {}
+            if ag_instance.llm.api_key:
+                headers["Authorization"] = f"Bearer {ag_instance.llm.api_key}"
+            r = requests.get(
+                f"{ag_instance.llm.base_url}/v1/models",
+                headers=headers,
+                timeout=3,
+            )
+            llm_ok = r.status_code == 200
+    except Exception:
+        pass
+
+    return {
+        "db_connected": db_ok,
+        "llm_connected": llm_ok,
+        "current_db": ag_instance.db.current_db,
+    }
+
+
+@app.post("/api/query/paginate")
+def paginate_query(req: PaginateRequest):
+    """分页查询：对已有 SQL 进行分页"""
+    ag = _require_agent()
+    try:
+        # 获取总数
+        base_sql = req.sql.rstrip(";")
+        count_sql = f"SELECT COUNT(*) FROM ({base_sql}) AS _count_subquery"
+        _, count_rows = ag.db.execute_query(count_sql)
+        total = count_rows[0][0] if count_rows else 0
+
+        # 分页查询
+        offset = (req.page - 1) * req.page_size
+        page_sql = f"{base_sql} LIMIT {req.page_size} OFFSET {offset}"
+        columns, rows = ag.db.execute_query(page_sql)
+
+        # 将行数据转为可序列化格式
+        serializable_rows = [
+            [str(v) if v is not None else None for v in row]
+            for row in rows
+        ]
+
+        return {
+            "columns": columns,
+            "rows": serializable_rows,
+            "total": total,
+            "page": req.page,
+            "page_size": req.page_size,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/conversations/{conv_id}/execute")
+def execute_sql_endpoint(conv_id: str, req: ExecuteRequest):
+    """两阶段执行：用户确认后执行 SQL"""
+    ag = _require_agent()
+
+    conv = store.get_conversation(conv_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="对话不存在")
+
+    try:
+        # 构建执行计划
+        plan = {
+            "action": req.action,
+            "sql": req.sql,
+            "explanation": "",
+            "target_db": req.target_db or "",
+            "target_table": "",
+            "success": False,
+            "result": None,
+            "error": "",
+        }
+
+        # 执行 SQL（跳过确认回调，因为用户已在前端确认）
+        result = ag.execute_plan(plan, confirm_callback=None)
+
+        # 更新原消息状态为已执行
+        store.update_message_status(conv_id, req.message_id, "executed")
+
+        # 构建 AI 回复消息
+        return _build_ai_response(conv_id, result)
+
+    except Exception as e:
+        return store.add_message(
+            conv_id,
+            role="assistant",
+            content="执行失败",
+            error=str(e),
+        )
+
+
+@app.post("/api/conversations/{conv_id}/cancel/{message_id}")
+def cancel_execution(conv_id: str, message_id: str):
+    """取消待执行的 SQL 操作"""
+    conv = store.get_conversation(conv_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="对话不存在")
+
+    # 更新原消息状态为已取消
+    store.update_message_status(conv_id, message_id, "cancelled")
+
+    # 添加取消提示消息
+    msg = store.add_message(
+        conv_id,
+        role="assistant",
+        content="操作已取消",
+        action="chat",
+    )
+    return msg or {"success": True}
+
+
+@app.post("/api/conversations/{conv_id}/messages/stream")
+def send_message_stream(conv_id: str, req: MessageRequest):
+    """流式发送消息 (SSE)：实时返回 AI 思考过程"""
+    ag = _require_agent()
+
+    conv = store.get_conversation(conv_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="对话不存在")
+
+    user_input = req.content.strip()
+    if not user_input:
+        raise HTTPException(status_code=400, detail="消息内容不能为空")
+
+    # 保存用户消息
+    store.add_message(conv_id, role="user", content=user_input)
+
+    # 检查附件
+    file_info_text = ""
+    file_data = None
+    if req.upload_id and req.upload_id in upload_storage:
+        file_data = upload_storage[req.upload_id]
+        file_info_text = (
+            f"\n[附件信息] 文件名: {file_data['filename']}, "
+            f"列名: {', '.join(file_data['columns'])}, "
+            f"行数: {file_data['row_count']}"
+        )
+
+    def event_generator():
+        try:
+            # 流式思考阶段
+            skill_context = ag.skill.get_summary()
+            system_prompt = build_system_prompt(
+                skill_context, ag.db.current_db, ag.db_type
+            )
+
+            full_response = ""
+            for token in ag.llm.chat_stream(
+                user_input + file_info_text, system_prompt
+            ):
+                full_response += token
+                yield f"event: thinking\ndata: {json.dumps({'token': token})}\n\n"
+
+            # 解析 LLM 响应
+            parsed = ag.llm.parse_json_response(full_response)
+            action = parsed.get("action", "chat")
+            sql = parsed.get("sql", "").strip()
+            explanation = parsed.get("explanation", "")
+            target_db = parsed.get("database", "").strip()
+
+            # 如果是文件导入
+            if action == "import_file" and file_data:
+                plan = {
+                    "action": action, "sql": sql,
+                    "explanation": explanation,
+                    "target_db": target_db,
+                    "target_table": parsed.get("target_table", "").strip(),
+                }
+                result_msg = _handle_import_file(
+                    ag, conv_id, plan, file_data, req.upload_id
+                )
+                yield f"event: result\ndata: {json.dumps(result_msg)}\n\n"
+                yield f"event: done\ndata: {json.dumps({})}\n\n"
+                return
+
+            # DDL 操作：返回 pending 状态，让用户在前端确认
+            if action in DDL_ACTIONS and sql:
+                plan_data = {
+                    "action": action,
+                    "sql": sql,
+                    "explanation": explanation,
+                    "target_db": target_db,
+                }
+                msg = store.add_message(
+                    conv_id,
+                    role="assistant",
+                    content=explanation,
+                    sql=sql,
+                    action=action,
+                    status="pending",
+                    plan=plan_data,
+                )
+                yield f"event: plan\ndata: {json.dumps(msg)}\n\n"
+                yield f"event: done\ndata: {json.dumps({})}\n\n"
+                return
+
+            # 非 DDL：构建完整计划并直接执行
+            plan = {
+                "action": action,
+                "sql": sql,
+                "explanation": explanation,
+                "target_db": target_db,
+                "target_table": parsed.get("target_table", "").strip(),
+                "success": action in ("chat",) or not sql,
+                "result": explanation if (action == "chat" or not sql) else None,
+                "error": "",
+            }
+
+            result = ag.execute_plan(plan, confirm_callback=None)
+            result_msg = _build_ai_response(conv_id, result)
+            yield f"event: result\ndata: {json.dumps(result_msg)}\n\n"
+            yield f"event: done\ndata: {json.dumps({})}\n\n"
+
+        except Exception as e:
+            logger.error("SSE stream error: %s", e, exc_info=True)
+            error_msg = store.add_message(
+                conv_id,
+                role="assistant",
+                content="处理请求时发生错误",
+                error=str(e),
+            )
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+            yield f"event: done\ndata: {json.dumps({})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/skill")

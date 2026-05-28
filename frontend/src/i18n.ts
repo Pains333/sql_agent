@@ -123,6 +123,10 @@ const texts = {
   'pagination.next': { zh: '下一页', en: 'Next' },
   'pagination.page': { zh: '页', en: 'Page' },
 
+  // Settings
+  'settings.title': { zh: '设置', en: 'Settings' },
+  'settings.darkMode': { zh: '深色模式', en: 'Dark Mode' },
+
   // Errors
   'error.title': { zh: '错误', en: 'Error' },
   'error.connectionFailed': { zh: '连接失败', en: 'Connection failed' },
