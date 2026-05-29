@@ -1,6 +1,3 @@
-/* ============================================
-   Types for SQL Agent Frontend
-   ============================================ */
 
 export interface Message {
   id: string;

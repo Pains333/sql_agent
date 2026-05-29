@@ -1,6 +1,3 @@
-/* ============================================
-   ChatArea — main chat interface with all features
-   ============================================ */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Conversation, Message, UploadResult, DatabaseInfo } from '../types';

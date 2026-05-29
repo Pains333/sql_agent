@@ -1,6 +1,3 @@
-/* ============================================
-   App — Root component with setup wizard
-   ============================================ */
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Conversation, ConversationSummary } from './types';
@@ -29,7 +26,6 @@ export default function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
-  /* ---- Apply theme ---- */
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('theme', theme);
@@ -39,7 +35,6 @@ export default function App() {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   }
 
-  /* ---- Check setup status on mount (with retry) ---- */
   useEffect(() => {
     let cancelled = false;
     async function checkStatus() {
@@ -61,7 +56,6 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  /* ---- Load conversation list ---- */
   const refreshList = useCallback(async () => {
     try {
       const list = await listConversations();
@@ -77,7 +71,6 @@ export default function App() {
     }
   }, [setupDone, refreshList]);
 
-  /* ---- Load active conversation ---- */
   const loadConversation = useCallback(async (id: string) => {
     try {
       const conv = await getConversation(id);
@@ -88,7 +81,6 @@ export default function App() {
     }
   }, []);
 
-  /* ---- Create & activate a new conversation (shared logic) ---- */
   async function _createAndActivate(): Promise<string | null> {
     try {
       const conv = await createConversation();
@@ -102,12 +94,10 @@ export default function App() {
     }
   }
 
-  /* ---- Create new conversation ---- */
   async function handleNew() {
     await _createAndActivate();
   }
 
-  /* ---- Select conversation ---- */
   function handleSelect(id: string) {
     loadConversation(id);
     // Auto-close sidebar on mobile
@@ -116,7 +106,6 @@ export default function App() {
     }
   }
 
-  /* ---- Delete conversation ---- */
   async function handleDelete(id: string) {
     try {
       await deleteConversation(id);
@@ -130,23 +119,19 @@ export default function App() {
     }
   }
 
-  /* ---- Auto-create conversation when sending first message ---- */
   async function handleAutoCreate(_firstMessage: string): Promise<string | null> {
     return _createAndActivate();
   }
 
-  /* ---- Message sent callback ---- */
   async function handleMessageSent(convId: string) {
     await loadConversation(convId);
     await refreshList();
   }
 
-  /* ---- Setup complete ---- */
   function handleSetupComplete() {
     setSetupDone(true);
   }
 
-  /* ---- Logout / Reconfigure ---- */
   async function handleLogout() {
     try {
       await resetSetup();

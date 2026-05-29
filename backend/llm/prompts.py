@@ -2,7 +2,6 @@
 LLM 提示词模板 - 支持多数据库类型
 """
 
-# 各数据库的 SQL 方言差异提示
 DB_SPECIFIC_RULES = {
     "postgresql": """
 - 自增主键用 SERIAL 或 BIGSERIAL

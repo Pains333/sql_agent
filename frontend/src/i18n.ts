@@ -1,6 +1,3 @@
-/* ============================================
-   i18n — Internationalization text mappings
-   ============================================ */
 
 export type Lang = 'zh' | 'en';
 

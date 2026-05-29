@@ -1,6 +1,3 @@
-/* ============================================
-   SetupWizard — 3-step configuration dialog
-   ============================================ */
 
 import { useState, useEffect } from 'react';
 import type { SetupConfig, OllamaModel } from '../types';

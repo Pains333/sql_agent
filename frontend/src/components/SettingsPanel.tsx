@@ -1,6 +1,3 @@
-/* ============================================
-   SettingsPanel — bottom-left settings popup
-   ============================================ */
 
 import { useEffect, useRef } from 'react';
 import { t } from '../i18n';

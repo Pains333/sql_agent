@@ -1,6 +1,3 @@
-/* ============================================
-   API Client — wraps all backend REST calls
-   ============================================ */
 
 import type { Conversation, ConversationSummary, Message, OllamaModel, SetupConfig, SetupResult, UploadResult, DatabaseInfo, HealthStatus, TableColumn, PaginatedResult } from './types';
 
@@ -18,7 +15,6 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-/* --- Setup --- */
 
 export async function getSetupStatus(): Promise<{ setup_done: boolean }> {
   return request<{ setup_done: boolean }>('/setup/status');
@@ -39,7 +35,6 @@ export async function resetSetup(): Promise<void> {
   await request('/setup/reset', { method: 'POST' });
 }
 
-/* --- Conversations --- */
 
 export async function listConversations(): Promise<ConversationSummary[]> {
   return request<ConversationSummary[]>('/conversations');
@@ -60,7 +55,6 @@ export async function deleteConversation(id: string): Promise<void> {
   await request(`/conversations/${id}`, { method: 'DELETE' });
 }
 
-/* --- Messages --- */
 
 export async function sendMessage(convId: string, content: string, uploadId?: string): Promise<Message> {
   return request<Message>(`/conversations/${convId}/messages`, {
@@ -69,7 +63,6 @@ export async function sendMessage(convId: string, content: string, uploadId?: st
   });
 }
 
-/* --- SQL Execution (two-phase) --- */
 
 export async function executeSQL(
   convId: string,
@@ -97,7 +90,6 @@ export async function cancelExecution(convId: string, messageId: string): Promis
   await request(`/conversations/${convId}/cancel/${messageId}`, { method: 'POST' });
 }
 
-/* --- Streaming Messages (SSE) --- */
 
 export function sendMessageStream(
   convId: string,
@@ -171,7 +163,6 @@ export function sendMessageStream(
   return controller;
 }
 
-/* --- Databases --- */
 
 export async function listDatabases(): Promise<DatabaseInfo> {
   return request<DatabaseInfo>('/databases');
@@ -192,13 +183,11 @@ export async function describeTable(db: string, table: string): Promise<{ databa
   return request(`/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}`);
 }
 
-/* --- Health --- */
 
 export async function healthCheck(): Promise<HealthStatus> {
   return request<HealthStatus>('/health');
 }
 
-/* --- Query Pagination --- */
 
 export async function paginateQuery(sql: string, page: number, pageSize: number): Promise<PaginatedResult> {
   return request<PaginatedResult>('/query/paginate', {
@@ -207,7 +196,6 @@ export async function paginateQuery(sql: string, page: number, pageSize: number)
   });
 }
 
-/* --- File Upload --- */
 
 export async function uploadFile(file: File): Promise<UploadResult> {
   const formData = new FormData();
@@ -228,7 +216,6 @@ export async function deleteUpload(uploadId: string): Promise<void> {
   await request(`/upload/${uploadId}`, { method: 'DELETE' });
 }
 
-/* --- Utilities --- */
 
 export async function getSkill(): Promise<{ content: string }> {
   return request<{ content: string }>('/skill');

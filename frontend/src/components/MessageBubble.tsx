@@ -1,6 +1,3 @@
-/* ============================================
-   MessageBubble — single chat message
-   ============================================ */
 
 import { useState } from 'react';
 import type { Message } from '../types';

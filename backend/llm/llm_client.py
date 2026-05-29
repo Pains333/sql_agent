@@ -208,13 +208,13 @@ class LLMClient:
         Returns:
             解析后的 JSON 字典
         """
-        # 尝试直接解析
+
         try:
             return json.loads(response_text)
         except json.JSONDecodeError:
             pass
 
-        # 尝试从 markdown 代码块中提取
+
         json_patterns = [
             r'```json\s*\n(.*?)\n\s*```',
             r'```\s*\n(.*?)\n\s*```',
@@ -229,7 +229,7 @@ class LLMClient:
                 except json.JSONDecodeError:
                     continue
 
-        # 如果都无法解析，返回一个默认结构
+
         logger.warning("无法从 LLM 回复中解析 JSON，使用 chat 回退: %s", response_text[:200])
         return {
             "action": "chat",

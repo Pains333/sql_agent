@@ -1,6 +1,3 @@
-/* ============================================
-   Sidebar — conversation list & management
-   ============================================ */
 
 import { useState, useEffect } from 'react';
 import type { ConversationSummary, HealthStatus } from '../types';

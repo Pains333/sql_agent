@@ -1,6 +1,3 @@
-/* ============================================
-   ContextMenu — right-click context menu
-   ============================================ */
 
 import { useEffect, useRef } from 'react';
 import { t } from '../i18n';

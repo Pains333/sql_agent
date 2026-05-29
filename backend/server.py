@@ -23,7 +23,7 @@ from backend.core import config
 
 logger = get_logger(__name__)
 
-# 配置持久化文件路径
+
 SETUP_CONFIG_PATH = os.path.join(config.PROJECT_ROOT, "setup_config.json")
 
 # 上传文件过期时间（30 分钟）
@@ -113,14 +113,13 @@ async def lifespan(app: FastAPI):
             setup_done = True
             logger.info("Agent 初始化失败，但配置已保存，将在访问时延迟重试")
     yield
-    # 关闭时清理
     if agent:
         agent.close()
 
 
 app = FastAPI(title="SQL Agent API", version="2.0.0", lifespan=lifespan)
 
-# CORS 配置
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -130,7 +129,7 @@ app.add_middleware(
 )
 
 
-# === 请求/响应模型 ===
+
 
 class SetupRequest(BaseModel):
     language: str = "zh"
@@ -178,7 +177,7 @@ class PaginateRequest(BaseModel):
     page_size: int = 50
 
 
-# === Setup API ===
+
 
 @app.get("/api/setup/status")
 def get_setup_status():
@@ -249,7 +248,7 @@ def submit_setup(req: SetupRequest):
     """
     global agent, setup_done
 
-    # 校验必填字段
+
     if not req.db_user.strip():
         raise HTTPException(status_code=400, detail="数据库用户名不能为空")
     if not req.db_password.strip():
@@ -305,7 +304,7 @@ def _require_agent():
     return agent
 
 
-# === 对话 API ===
+
 
 @app.get("/api/conversations")
 def list_conversations():
@@ -357,14 +356,11 @@ def send_message(conv_id: str, req: MessageRequest):
     if not user_input:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
 
-    # 保存用户消息
     store.add_message(conv_id, role="user", content=user_input)
 
-    # 定期清理过期上传
     _cleanup_expired_uploads()
 
     try:
-        # 检查是否有附件
         file_data = None
         file_info_text = ""
         if req.upload_id and req.upload_id in upload_storage:
@@ -378,7 +374,6 @@ def send_message(conv_id: str, req: MessageRequest):
         # 第一阶段：LLM 思考（将附件信息注入用户消息）
         plan = ag.think(user_input + file_info_text)
 
-        # 如果是 import_file action，返回 pending 状态等待用户确认
         if plan.get("action") == "import_file" and file_data:
             target_table = plan.get("target_table", "").strip()
             import_sql = plan.get("sql", "").strip() or _build_import_preview_sql(
@@ -397,7 +392,6 @@ def send_message(conv_id: str, req: MessageRequest):
         # 第二阶段：执行
         result = ag.execute_plan(plan, confirm_callback=None)
 
-        # 构建 AI 回复
         return _build_ai_response(conv_id, result)
 
     except Exception as e:
@@ -494,7 +488,6 @@ def _handle_import_file(ag, conv_id: str, plan: dict, file_data: dict, upload_id
         database=target_db,
     )
 
-    # 清理上传的文件数据
     upload_storage.pop(upload_id, None)
 
     if import_result["success"]:
@@ -515,7 +508,7 @@ def _handle_import_file(ag, conv_id: str, plan: dict, file_data: dict, upload_id
         )
 
 
-# === 工具 API ===
+
 
 @app.get("/api/databases")
 def list_databases():
@@ -535,7 +528,6 @@ def switch_database(req: SwitchDatabaseRequest):
     ag = _require_agent()
     try:
         ag.db.connect_to_db(req.database)
-        # 重新扫描数据库结构
         ag.scan_all_databases()
         return {
             "success": True,
@@ -582,14 +574,12 @@ def health_check():
     if ag_instance is None:
         return {"db_connected": False, "llm_connected": False, "current_db": ""}
 
-    # 检查数据库连接
     db_ok = False
     try:
         db_ok = not ag_instance.db._is_closed()
     except Exception:
         pass
 
-    # 检查 LLM 连接
     llm_ok = False
     try:
         if ag_instance.llm.mode == "local":
@@ -620,18 +610,15 @@ def paginate_query(req: PaginateRequest):
     """分页查询：对已有 SQL 进行分页"""
     ag = _require_agent()
     try:
-        # 获取总数
         base_sql = req.sql.rstrip(";")
         count_sql = f"SELECT COUNT(*) FROM ({base_sql}) AS _count_subquery"
         _, count_rows = ag.db.execute_query(count_sql)
         total = count_rows[0][0] if count_rows else 0
 
-        # 分页查询
         offset = (req.page - 1) * req.page_size
         page_sql = f"{base_sql} LIMIT {req.page_size} OFFSET {offset}"
         columns, rows = ag.db.execute_query(page_sql)
 
-        # 将行数据转为可序列化格式
         serializable_rows = [
             [str(v) if v is not None else None for v in row]
             for row in rows
@@ -658,7 +645,6 @@ def execute_sql_endpoint(conv_id: str, req: ExecuteRequest):
         raise HTTPException(status_code=404, detail="对话不存在")
 
     try:
-        # 文件导入操作
         if req.action == "import_file" and req.upload_id:
             file_data = upload_storage.get(req.upload_id)
             if not file_data:
@@ -672,12 +658,10 @@ def execute_sql_endpoint(conv_id: str, req: ExecuteRequest):
                 "target_table": req.target_table or "",
             }
 
-            # 更新原消息状态为已执行
             store.update_message_status(conv_id, req.message_id, "executed")
 
             return _handle_import_file(ag, conv_id, plan, file_data, req.upload_id)
 
-        # 普通 DDL/DML 操作
         plan = {
             "action": req.action,
             "sql": req.sql,
@@ -692,10 +676,8 @@ def execute_sql_endpoint(conv_id: str, req: ExecuteRequest):
         # 执行 SQL（跳过确认回调，因为用户已在前端确认）
         result = ag.execute_plan(plan, confirm_callback=None)
 
-        # 更新原消息状态为已执行
         store.update_message_status(conv_id, req.message_id, "executed")
 
-        # 构建 AI 回复消息
         return _build_ai_response(conv_id, result)
 
     except Exception as e:
@@ -714,10 +696,8 @@ def cancel_execution(conv_id: str, message_id: str):
     if conv is None:
         raise HTTPException(status_code=404, detail="对话不存在")
 
-    # 更新原消息状态为已取消
     store.update_message_status(conv_id, message_id, "cancelled")
 
-    # 添加取消提示消息
     msg = store.add_message(
         conv_id,
         role="assistant",
@@ -740,10 +720,8 @@ def send_message_stream(conv_id: str, req: MessageRequest):
     if not user_input:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
 
-    # 保存用户消息
     store.add_message(conv_id, role="user", content=user_input)
 
-    # 检查附件
     file_info_text = ""
     file_data = None
     if req.upload_id and req.upload_id in upload_storage:
@@ -769,14 +747,12 @@ def send_message_stream(conv_id: str, req: MessageRequest):
                 full_response += token
                 yield f"event: thinking\ndata: {json.dumps({'token': token})}\n\n"
 
-            # 解析 LLM 响应
             parsed = ag.llm.parse_json_response(full_response)
             action = parsed.get("action", "chat")
             sql = parsed.get("sql", "").strip()
             explanation = parsed.get("explanation", "")
             target_db = parsed.get("database", "").strip()
 
-            # 如果是文件导入：返回 pending 状态等待用户确认
             if action == "import_file" and file_data:
                 target_table = parsed.get("target_table", "").strip()
                 import_sql = sql or _build_import_preview_sql(target_table, file_data)
@@ -868,7 +844,7 @@ def get_skill():
     return {"content": ag.skill.read()}
 
 
-# === 文件上传 API ===
+
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -895,13 +871,10 @@ async def upload_file(file: UploadFile = File(...)):
         with open(tmp_path, "wb") as f:
             f.write(content)
 
-        # 解析文件
         parsed = parse_file(tmp_path, filename)
 
-        # 清理临时文件
         os.remove(tmp_path)
 
-        # 存储解析结果（带创建时间用于过期清理）
         upload_id = uuid.uuid4().hex[:12]
         upload_storage[upload_id] = {
             "filename": filename,
@@ -933,7 +906,7 @@ def delete_upload(upload_id: str):
     return {"success": True}
 
 
-# === 辅助函数 ===
+
 
 def _format_query_result(columns: list, rows: list) -> str:
     """将查询结果格式化为 Markdown 表格"""

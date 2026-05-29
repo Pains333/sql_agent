@@ -111,9 +111,7 @@ class DBClient:
         if database and database != self.current_db and self.db_type != "oracle":
             self.connect_to_db(database)
 
-    # ===========================
     # 统一 Cursor 执行
-    # ===========================
 
     def _execute_with_cursor(
         self,
@@ -174,9 +172,7 @@ class DBClient:
         _, rows = self._execute_with_cursor(sql, params, fetch=True)
         return rows
 
-    # ===========================
     # SQL 执行（公共 API）
-    # ===========================
 
     def execute_query(self, sql_str: str) -> tuple:
         """执行查询 SQL，返回 (columns, rows)"""
@@ -192,9 +188,6 @@ class DBClient:
         rowcount = self._execute_with_cursor(sql_str)
         return f"执行成功，影响了 {rowcount} 行"
 
-    # ===========================
-    # 元数据查询
-    # ===========================
 
     def list_databases(self) -> list:
         """列出所有数据库"""
@@ -358,9 +351,7 @@ class DBClient:
             result.append((col_name, full_type, ", ".join(constraints) if constraints else ""))
         return result
 
-    # ===========================
     # 数据库信息
-    # ===========================
 
     def get_database_info(self, database: str) -> dict:
         """获取数据库详细信息"""

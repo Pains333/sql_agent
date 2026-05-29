@@ -1,6 +1,3 @@
-/* ============================================
-   SchemaDrawer — database structure browser
-   ============================================ */
 
 import { useState, useEffect } from 'react';
 import type { TableColumn } from '../types';
