@@ -5,9 +5,9 @@
 
 from typing import Optional
 
-import config
-from exceptions import DatabaseConnectionError, DatabaseExecutionError
-from logging_config import get_logger
+from backend.core import config
+from backend.core.exceptions import DatabaseConnectionError, DatabaseExecutionError
+from backend.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 

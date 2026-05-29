@@ -7,10 +7,11 @@
 - 多余列不写入
 """
 
+from datetime import datetime
 from typing import Optional
 
-from exceptions import DataImportError
-from logging_config import get_logger
+from backend.core.exceptions import DataImportError
+from backend.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -23,6 +24,15 @@ AUTO_INCREMENT_KEYWORDS = {
 
 # 批量插入的每批行数
 BATCH_SIZE = 500
+
+# 用于识别日期/时间字段的类型关键词
+TIMESTAMP_TYPE_KEYWORDS = {
+    "timestamp", "timestamptz", "datetime", "date", "time",
+    "timestamp with time zone", "timestamp without time zone",
+}
+
+# 特殊标记：表示该列应自动填充当前时间
+_SENTINEL_NOW = "_CURRENT_TIMESTAMP_"
 
 
 def import_data_to_table(
@@ -99,6 +109,8 @@ def import_data_to_table(
         msg_parts = [f"成功导入 {inserted} 行数据到表 `{table_name}`"]
         if result["auto_columns"]:
             msg_parts.append(f"自增字段已跳过: {', '.join(result['auto_columns'])}")
+        if match_result.get("timestamp_columns"):
+            msg_parts.append(f"以下时间字段自动填充当前时间: {', '.join(match_result['timestamp_columns'])}")
         if result["null_columns"]:
             msg_parts.append(f"以下可空字段填充 NULL: {', '.join(result['null_columns'])}")
         if result["skipped_columns"]:
@@ -154,7 +166,7 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
     执行列匹配逻辑
 
     Returns:
-        {error, insert_columns, column_mapping, skipped_columns, null_columns, auto_columns}
+        {error, insert_columns, column_mapping, skipped_columns, null_columns, auto_columns, timestamp_columns}
     """
     # 文件列名（小写映射到原始索引）
     file_col_map = {
@@ -166,6 +178,7 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
     column_mapping = {}
     null_columns = []
     auto_columns = []
+    timestamp_columns = []
     missing_required = []
 
     for col_info in table_info:
@@ -181,9 +194,17 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
             insert_columns.append(col_name)
             column_mapping[col_name] = file_col_map[col_name_lower]
         elif col_info["is_nullable"]:
-            insert_columns.append(col_name)
-            column_mapping[col_name] = None
-            null_columns.append(col_name)
+            # 判断是否是日期/时间类型 → 自动填充当前时间
+            col_type_lower = col_info["type"].lower() if col_info["type"] else ""
+            is_time_col = any(kw in col_type_lower for kw in TIMESTAMP_TYPE_KEYWORDS)
+            if is_time_col:
+                insert_columns.append(col_name)
+                column_mapping[col_name] = _SENTINEL_NOW
+                timestamp_columns.append(col_name)
+            else:
+                insert_columns.append(col_name)
+                column_mapping[col_name] = None
+                null_columns.append(col_name)
         else:
             missing_required.append(col_name)
 
@@ -195,6 +216,7 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
             "skipped_columns": [],
             "null_columns": [],
             "auto_columns": auto_columns,
+            "timestamp_columns": [],
         }
 
     table_col_names = {info["name"].lower().strip() for info in table_info}
@@ -210,15 +232,23 @@ def _match_columns(file_columns: list, table_info: list) -> dict:
         "skipped_columns": skipped_columns,
         "null_columns": null_columns,
         "auto_columns": auto_columns,
+        "timestamp_columns": timestamp_columns,
     }
 
 
 def _build_row_values(row: list, insert_columns: list, column_mapping: dict) -> list:
     """为单行数据构建 VALUES 参数列表"""
-    return [
-        row[column_mapping[col]] if column_mapping.get(col) is not None else None
-        for col in insert_columns
-    ]
+    values = []
+    now = datetime.now()
+    for col in insert_columns:
+        mapping = column_mapping.get(col)
+        if mapping == _SENTINEL_NOW:
+            values.append(now)
+        elif mapping is not None:
+            values.append(row[mapping])
+        else:
+            values.append(None)
+    return values
 
 
 def _batch_insert(
@@ -230,6 +260,7 @@ def _batch_insert(
 ) -> int:
     """
     批量插入数据（使用 executemany，每批 BATCH_SIZE 行）
+    自动处理唯一约束冲突（跳过重复行）
 
     Returns:
         成功插入的行数
@@ -244,7 +275,14 @@ def _batch_insert(
     else:
         placeholders = ", ".join(["%s"] * len(insert_columns))
 
-    sql = f'INSERT INTO {quote}{table_name}{quote} ({col_str}) VALUES ({placeholders})'
+    # 构建冲突处理的 SQL
+    if db_client.db_type == "postgresql":
+        sql = f'INSERT INTO {quote}{table_name}{quote} ({col_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING'
+    elif db_client.db_type == "mysql":
+        sql = f'INSERT IGNORE INTO {quote}{table_name}{quote} ({col_str}) VALUES ({placeholders})'
+    else:
+        # Oracle: 普通 INSERT（逐行处理冲突）
+        sql = f'INSERT INTO {quote}{table_name}{quote} ({col_str}) VALUES ({placeholders})'
 
     total_inserted = 0
 
@@ -256,8 +294,20 @@ def _batch_insert(
         ]
 
         try:
-            db_client.execute_many(sql, values_list)
-            total_inserted += len(batch)
+            if db_client.db_type == "oracle":
+                # Oracle 没有 ON CONFLICT，逐行插入跳过冲突
+                inserted_count = 0
+                for values in values_list:
+                    try:
+                        db_client.execute_many(sql, [values])
+                        inserted_count += 1
+                    except Exception:
+                        # 跳过冲突行
+                        continue
+                total_inserted += inserted_count
+            else:
+                db_client.execute_many(sql, values_list)
+                total_inserted += len(batch)
         except Exception as e:
             raise DataImportError(
                 f"批量插入失败 (行 {batch_start+1}-{batch_start+len(batch)}): {e}"
@@ -267,3 +317,4 @@ def _batch_insert(
             logger.info("已插入 %d / %d 行", total_inserted, len(rows))
 
     return total_inserted
+

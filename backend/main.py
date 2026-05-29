@@ -13,8 +13,8 @@ from rich.markdown import Markdown
 from rich.text import Text
 from rich import box
 
-from agent import SQLAgent
-from logging_config import setup_logging
+from backend.core.agent import SQLAgent
+from backend.core.logging_config import setup_logging
 
 console = Console()
 

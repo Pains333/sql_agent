@@ -6,12 +6,12 @@ SQL Agent 核心逻辑
 import re
 from typing import Optional, Callable
 
-from llm_client import LLMClient
-from db_client import DBClient
-from skill_manager import SkillManager, DEFAULT_SKILL_CONTENT
-from prompts import build_system_prompt
-from exceptions import SQLAgentError
-from logging_config import get_logger
+from backend.llm.llm_client import LLMClient
+from backend.db.db_client import DBClient
+from backend.services.skill_manager import SkillManager, DEFAULT_SKILL_CONTENT
+from backend.llm.prompts import build_system_prompt
+from backend.core.exceptions import SQLAgentError
+from backend.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 

@@ -77,10 +77,19 @@ export async function executeSQL(
   action: string,
   messageId: string,
   targetDb?: string,
+  uploadId?: string,
+  targetTable?: string,
 ): Promise<Message> {
   return request<Message>(`/conversations/${convId}/execute`, {
     method: 'POST',
-    body: JSON.stringify({ sql, action, message_id: messageId, target_db: targetDb }),
+    body: JSON.stringify({
+      sql,
+      action,
+      message_id: messageId,
+      target_db: targetDb,
+      upload_id: uploadId,
+      target_table: targetTable,
+    }),
   });
 }
 

@@ -5,6 +5,9 @@ SQL Agent 配置文件
 
 import os
 
+# === 项目根目录 (backend/ 的父目录) ===
+PROJECT_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # === Ollama 默认配置 ===
 OLLAMA_BASE_URL: str = "http://localhost:11434"
 OLLAMA_MODEL: str = "gemma4:31b"
@@ -13,7 +16,7 @@ OLLAMA_MODEL: str = "gemma4:31b"
 PG_HOST: str = "localhost"
 
 # === skill.md 文件路径 ===
-SKILL_FILE_PATH: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skill.md")
+SKILL_FILE_PATH: str = os.path.join(PROJECT_ROOT, "skill.md")
 
 # === LLM 请求配置 ===
 LLM_TEMPERATURE: float = 0.1

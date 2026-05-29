@@ -17,6 +17,9 @@ export interface Message {
     sql: string;
     explanation: string;
     target_db?: string;
+    upload_id?: string;
+    target_table?: string;
+    filename?: string;
   };
 }
 

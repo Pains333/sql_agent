@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Conversation, Message, UploadResult, DatabaseInfo } from '../types';
 import { sendMessage, sendMessageStream, uploadFile, deleteUpload, executeSQL, cancelExecution, listDatabases, switchDatabase } from '../api';
 import { t } from '../i18n';
+import { Menu, LayoutGrid, Bot, Paperclip, X, Send } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import SchemaDrawer from './SchemaDrawer';
 import './ChatArea.css';
@@ -37,6 +38,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
   const [selectedCmd, setSelectedCmd] = useState(0);
   const [schemaOpen, setSchemaOpen] = useState(false);
   const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
+  const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,6 +114,15 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
         if (!convId) { setLoading(false); return; }
       }
 
+      // Optimistic UI: show user message immediately
+      const optimisticMsg: Message = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        content: text,
+        timestamp: new Date().toISOString(),
+      };
+      setPendingUserMessage(optimisticMsg);
+
       // Try streaming first, fall back to regular
       try {
         await new Promise<void>((resolve, reject) => {
@@ -122,12 +133,14 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
             onPlan: (_plan) => {
               setStreamingContent('');
               setAttachment(null);
+              setPendingUserMessage(null);
               onMessageSent(convId!);
               resolve();
             },
             onResult: (_msg) => {
               setStreamingContent('');
               setAttachment(null);
+              setPendingUserMessage(null);
               onMessageSent(convId!);
               resolve();
             },
@@ -136,6 +149,8 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
             },
             onDone: () => {
               setStreamingContent('');
+              setPendingUserMessage(null);
+              onMessageSent(convId!);
               resolve();
             },
           });
@@ -145,6 +160,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
         setStreamingContent('');
         await sendMessage(convId, text, currentUploadId);
         setAttachment(null);
+        setPendingUserMessage(null);
         onMessageSent(convId);
       }
     } catch (err) {
@@ -152,14 +168,18 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
     } finally {
       setLoading(false);
       setStreamingContent('');
+      setPendingUserMessage(null);
       abortRef.current = null;
     }
   }
 
-  async function handleExecute(messageId: string, sql: string, action: string) {
+  async function handleExecute(messageId: string, sql: string, action: string, plan?: Record<string, unknown>) {
     if (!conversation) return;
     try {
-      await executeSQL(conversation.id, sql, action, messageId);
+      const uploadId = plan?.upload_id as string | undefined;
+      const targetTable = plan?.target_table as string | undefined;
+      const targetDb = plan?.target_db as string | undefined;
+      await executeSQL(conversation.id, sql, action, messageId, targetDb, uploadId, targetTable);
       onMessageSent(conversation.id);
     } catch (err) {
       console.error('Execute failed:', err);
@@ -235,11 +255,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
           className={`hamburger-btn ${sidebarCollapsed ? 'visible' : ''}`}
           onClick={onToggleSidebar}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
+          <Menu size={18} />
         </button>
 
         {/* Database Switcher */}
@@ -277,9 +293,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
           className={`schema-toggle-btn ${schemaOpen ? 'active' : ''}`}
           onClick={() => setSchemaOpen(!schemaOpen)}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-          </svg>
+          <LayoutGrid size={14} />
           {t('schema.title')}
         </button>
       </div>
@@ -289,7 +303,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div className="messages-container">
             <div className="messages-inner">
-              {!hasMessages && !streamingContent && (
+              {!hasMessages && !streamingContent && !pendingUserMessage && (
                 <div className="empty-state">
                   <h2 className="empty-title">{t('chat.title')}</h2>
                   <p className="empty-subtitle">{t('chat.subtitle')}</p>
@@ -308,10 +322,17 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
                   onCancel={handleCancel}
                 />
               ))}
+              {/* Optimistic user message (shown before server confirms) */}
+              {pendingUserMessage && (
+                <MessageBubble
+                  key={pendingUserMessage.id}
+                  message={pendingUserMessage}
+                />
+              )}
               {streamingContent && (
                 <div className="message-row assistant">
                   <div className="avatar avatar-ai">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="11" width="18" height="10" rx="2" /><circle cx="12" cy="5" r="3" /><line x1="8" y1="16" x2="8" y2="16.01" /><line x1="16" y1="16" x2="16" y2="16.01" /></svg>
+                    <Bot size={16} color="white" />
                   </div>
                   <div className="bubble bubble-ai">
                     <div className="streaming-content">
@@ -324,7 +345,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
               {loading && !streamingContent && (
                 <div className="message-row assistant">
                   <div className="avatar avatar-ai">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="11" width="18" height="10" rx="2" /><circle cx="12" cy="5" r="3" /><line x1="8" y1="16" x2="8" y2="16.01" /><line x1="16" y1="16" x2="16" y2="16.01" /></svg>
+                    <Bot size={16} color="white" />
                   </div>
                   <div className="bubble bubble-ai">
                     <div className="typing-indicator">
@@ -355,14 +376,14 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
                 {attachment && !uploading && (
                   <div className="attachment-tag">
                     <span className="attachment-icon">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                      <Paperclip size={14} />
                     </span>
                     <span className="attachment-name">{attachment.filename}</span>
                     <span className="attachment-meta">
                       {attachment.columns.length} {t('chat.columns')} · {attachment.row_count} {t('chat.rows')}
                     </span>
                     <button className="attachment-remove" onClick={handleRemoveAttachment} title={t('chat.removeAttachment')}>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                      <X size={10} strokeWidth={3} />
                     </button>
                   </div>
                 )}
@@ -397,9 +418,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
                 disabled={uploading || loading}
                 title={t('chat.uploadTitle')}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-                </svg>
+                <Paperclip size={20} />
               </button>
               <textarea
                 ref={inputRef}
@@ -415,10 +434,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
                 {loading ? (
                   <div className="send-spinner" />
                 ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 2L11 13" />
-                    <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-                  </svg>
+                  <Send size={20} />
                 )}
               </button>
             </div>

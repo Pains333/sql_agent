@@ -12,19 +12,19 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 
-from agent import SQLAgent, DDL_ACTIONS
-from conversation_store import ConversationStore
-from file_parser import parse_file, SUPPORTED_EXTENSIONS
-from data_importer import import_data_to_table
-from skill_manager import DEFAULT_SKILL_CONTENT
-from prompts import build_system_prompt
-from logging_config import get_logger, setup_logging
-import config
+from backend.core.agent import SQLAgent, DDL_ACTIONS
+from backend.services.conversation_store import ConversationStore
+from backend.services.file_parser import parse_file, SUPPORTED_EXTENSIONS
+from backend.db.data_importer import import_data_to_table
+from backend.services.skill_manager import DEFAULT_SKILL_CONTENT
+from backend.llm.prompts import build_system_prompt
+from backend.core.logging_config import get_logger, setup_logging
+from backend.core import config
 
 logger = get_logger(__name__)
 
 # 配置持久化文件路径
-SETUP_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setup_config.json")
+SETUP_CONFIG_PATH = os.path.join(config.PROJECT_ROOT, "setup_config.json")
 
 # 上传文件过期时间（30 分钟）
 UPLOAD_TTL_SECONDS = 30 * 60
@@ -168,6 +168,8 @@ class ExecuteRequest(BaseModel):
     action: str
     message_id: str
     target_db: Optional[str] = None
+    upload_id: Optional[str] = None
+    target_table: Optional[str] = None
 
 
 class PaginateRequest(BaseModel):
@@ -376,9 +378,21 @@ def send_message(conv_id: str, req: MessageRequest):
         # 第一阶段：LLM 思考（将附件信息注入用户消息）
         plan = ag.think(user_input + file_info_text)
 
-        # 如果是 import_file action，直接执行数据导入
+        # 如果是 import_file action，返回 pending 状态等待用户确认
         if plan.get("action") == "import_file" and file_data:
-            return _handle_import_file(ag, conv_id, plan, file_data, req.upload_id)
+            target_table = plan.get("target_table", "").strip()
+            import_sql = plan.get("sql", "").strip() or _build_import_preview_sql(
+                target_table, file_data
+            )
+            return store.add_message(
+                conv_id,
+                role="assistant",
+                content=plan.get("explanation", f"将附件 {file_data['filename']} 的数据导入到表 {target_table}"),
+                sql=import_sql,
+                action="import_file",
+                status="pending",
+                plan={**plan, "upload_id": req.upload_id, "filename": file_data['filename']},
+            )
 
         # 第二阶段：执行
         result = ag.execute_plan(plan, confirm_callback=None)
@@ -424,6 +438,31 @@ def _build_ai_response(conv_id: str, result: dict):
         action=result.get("action", ""),
         result=result_text,
     )
+
+
+def _build_import_preview_sql(target_table: str, file_data: dict) -> str:
+    """为文件导入生成预览 SQL，让用户确认"""
+    columns = file_data.get("columns", [])
+    row_count = file_data.get("row_count", 0)
+    filename = file_data.get("filename", "")
+
+    col_str = ", ".join(f'"{c}"' for c in columns)
+    placeholders = ", ".join(["?" for _ in columns])
+
+    lines = [
+        f"-- 导入附件: {filename}",
+        f"-- 目标表: {target_table}",
+        f"-- 数据列: {', '.join(columns)}",
+        f"-- 共 {row_count} 行数据",
+        f"-- 自增字段(如ID)会自动跳过，缺少的时间字段会自动填充当前时间",
+        f"-- 重复数据会自动跳过(ON CONFLICT DO NOTHING)",
+        f"",
+        f'INSERT INTO "{target_table}" ({col_str})',
+        f'VALUES ({placeholders})',
+        f'-- × {row_count} 行',
+    ]
+    return "\n".join(lines)
+
 
 
 def _handle_import_file(ag, conv_id: str, plan: dict, file_data: dict, upload_id: str):
@@ -611,7 +650,7 @@ def paginate_query(req: PaginateRequest):
 
 @app.post("/api/conversations/{conv_id}/execute")
 def execute_sql_endpoint(conv_id: str, req: ExecuteRequest):
-    """两阶段执行：用户确认后执行 SQL"""
+    """两阶段执行：用户确认后执行 SQL（支持 DDL 和文件导入）"""
     ag = _require_agent()
 
     conv = store.get_conversation(conv_id)
@@ -619,13 +658,32 @@ def execute_sql_endpoint(conv_id: str, req: ExecuteRequest):
         raise HTTPException(status_code=404, detail="对话不存在")
 
     try:
-        # 构建执行计划
+        # 文件导入操作
+        if req.action == "import_file" and req.upload_id:
+            file_data = upload_storage.get(req.upload_id)
+            if not file_data:
+                raise HTTPException(status_code=400, detail="上传文件已过期，请重新上传")
+
+            plan = {
+                "action": "import_file",
+                "sql": req.sql,
+                "explanation": "",
+                "target_db": req.target_db or "",
+                "target_table": req.target_table or "",
+            }
+
+            # 更新原消息状态为已执行
+            store.update_message_status(conv_id, req.message_id, "executed")
+
+            return _handle_import_file(ag, conv_id, plan, file_data, req.upload_id)
+
+        # 普通 DDL/DML 操作
         plan = {
             "action": req.action,
             "sql": req.sql,
             "explanation": "",
             "target_db": req.target_db or "",
-            "target_table": "",
+            "target_table": req.target_table or "",
             "success": False,
             "result": None,
             "error": "",
@@ -718,18 +776,28 @@ def send_message_stream(conv_id: str, req: MessageRequest):
             explanation = parsed.get("explanation", "")
             target_db = parsed.get("database", "").strip()
 
-            # 如果是文件导入
+            # 如果是文件导入：返回 pending 状态等待用户确认
             if action == "import_file" and file_data:
-                plan = {
-                    "action": action, "sql": sql,
+                target_table = parsed.get("target_table", "").strip()
+                import_sql = sql or _build_import_preview_sql(target_table, file_data)
+                plan_data = {
+                    "action": action, "sql": import_sql,
                     "explanation": explanation,
                     "target_db": target_db,
-                    "target_table": parsed.get("target_table", "").strip(),
+                    "target_table": target_table,
+                    "upload_id": req.upload_id,
+                    "filename": file_data['filename'],
                 }
-                result_msg = _handle_import_file(
-                    ag, conv_id, plan, file_data, req.upload_id
+                pending_msg = store.add_message(
+                    conv_id,
+                    role="assistant",
+                    content=explanation or f"将附件 {file_data['filename']} 的数据导入到表 {target_table}",
+                    sql=import_sql,
+                    action=action,
+                    status="pending",
+                    plan=plan_data,
                 )
-                yield f"event: result\ndata: {json.dumps(result_msg)}\n\n"
+                yield f"event: result\ndata: {json.dumps(pending_msg)}\n\n"
                 yield f"event: done\ndata: {json.dumps({})}\n\n"
                 return
 
@@ -819,7 +887,7 @@ async def upload_file(file: UploadFile = File(...)):
         )
 
     try:
-        tmp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".uploads")
+        tmp_dir = os.path.join(config.PROJECT_ROOT, ".uploads")
         os.makedirs(tmp_dir, exist_ok=True)
 
         tmp_path = os.path.join(tmp_dir, f"{uuid.uuid4().hex}{ext}")

@@ -4,6 +4,7 @@
 
 import { useEffect, useRef } from 'react';
 import { t } from '../i18n';
+import { Trash2 } from 'lucide-react';
 import './ContextMenu.css';
 
 interface ContextMenuProps {
@@ -29,7 +30,7 @@ export default function ContextMenu({ x, y, onDelete, onClose }: ContextMenuProp
   return (
     <div className="context-menu" style={{ top: y, left: x }} ref={ref}>
       <button className="context-menu-item danger" onClick={onDelete}>
-        <span className="context-menu-icon">🗑️</span>
+        <span className="context-menu-icon"><Trash2 size={14} /></span>
         {t('sidebar.delete')}
       </button>
     </div>

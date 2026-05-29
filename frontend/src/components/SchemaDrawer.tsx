@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import type { TableColumn } from '../types';
 import { listTables, describeTable } from '../api';
 import { t } from '../i18n';
+import { X, Database, ChevronDown, ChevronRight, Table2 } from 'lucide-react';
 import './SchemaDrawer.css';
 
 interface SchemaDrawerProps {
@@ -52,16 +53,12 @@ export default function SchemaDrawer({ currentDb, onClose }: SchemaDrawerProps) 
       <div className="schema-drawer-header">
         <span className="schema-drawer-title">{t('schema.title')}</span>
         <button className="schema-drawer-close" onClick={onClose}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <X size={16} />
         </button>
       </div>
 
       <div className="schema-drawer-db">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-        </svg>
+        <Database size={14} />
         {currentDb}
       </div>
 
@@ -78,16 +75,12 @@ export default function SchemaDrawer({ currentDb, onClose }: SchemaDrawerProps) 
               className={`schema-table-btn ${expandedTable === table ? 'expanded' : ''}`}
               onClick={() => toggleTable(table)}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                {expandedTable === table ? (
-                  <polyline points="6 9 12 15 18 9" />
-                ) : (
-                  <polyline points="9 18 15 12 9 6" />
-                )}
-              </svg>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" />
-              </svg>
+              {expandedTable === table ? (
+                <ChevronDown size={12} />
+              ) : (
+                <ChevronRight size={12} />
+              )}
+              <Table2 size={14} />
               <span>{table}</span>
             </button>
             {expandedTable === table && (

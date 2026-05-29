@@ -7,6 +7,7 @@ import type { SetupConfig, OllamaModel } from '../types';
 import { getOllamaModels, submitSetup } from '../api';
 import { t, setLang } from '../i18n';
 import type { Lang } from '../i18n';
+import { Eye, EyeOff, XCircle } from 'lucide-react';
 import './SetupWizard.css';
 
 interface SetupWizardProps {
@@ -231,7 +232,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                         type="button"
                         onClick={() => setShowApiKey(!showApiKey)}
                       >
-                        {showApiKey ? '🙈' : '👁️'}
+                        {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                   </div>
@@ -317,7 +318,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                   >
-                    {showPassword ? '🙈' : '👁️'}
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
@@ -327,7 +328,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
           {/* Error */}
           {error && (
             <div className="wizard-error">
-              <span className="error-icon">❌</span>
+              <span className="error-icon"><XCircle size={14} /></span>
               {error}
             </div>
           )}

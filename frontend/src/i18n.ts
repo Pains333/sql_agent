@@ -42,10 +42,10 @@ const texts = {
   'step3.desc': { zh: '配置数据库连接信息', en: 'Configure database connection' },
   'step3.type': { zh: '数据库类型', en: 'Database Type' },
   'step3.host': { zh: '数据库地址', en: 'Host' },
-  'step3.port': { zh: '端口', en: 'Port' },
-  'step3.user': { zh: '用户名', en: 'Username' },
+  'step3.port': { zh: '数据库端口', en: 'Port' },
+  'step3.user': { zh: '数据库用户名', en: 'Username' },
   'step3.userPlaceholder': { zh: '输入数据库用户名', en: 'Enter database username' },
-  'step3.password': { zh: '密码', en: 'Password' },
+  'step3.password': { zh: '数据库密码', en: 'Password' },
   'step3.passwordPlaceholder': { zh: '输入数据库密码', en: 'Enter database password' },
 
   // Chat
@@ -99,6 +99,7 @@ const texts = {
   'sql.cancel': { zh: '取消', en: 'Cancel' },
   'sql.edit': { zh: '编辑 SQL', en: 'Edit SQL' },
   'sql.confirmDDL': { zh: '此操作将修改数据库结构，请确认', en: 'This will modify the database structure, please confirm' },
+  'sql.confirmImport': { zh: '此操作将导入数据到表中，请确认', en: 'This will import data into the table, please confirm' },
   'sql.dangerWarning': { zh: '危险操作！此操作不可撤销', en: 'Dangerous operation! This cannot be undone' },
   'sql.cancelled': { zh: '操作已取消', en: 'Operation cancelled' },
   'sql.executing': { zh: '执行中...', en: 'Executing...' },

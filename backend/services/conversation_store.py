@@ -10,7 +10,9 @@ from typing import Optional
 
 
 # 对话存储目录
-CONVERSATIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conversations")
+from backend.core.config import PROJECT_ROOT
+
+CONVERSATIONS_DIR = os.path.join(PROJECT_ROOT, "conversations")
 
 
 class ConversationStore:

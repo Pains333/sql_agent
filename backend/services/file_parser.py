@@ -8,8 +8,8 @@ import os
 import numpy as np
 import pandas as pd
 
-from exceptions import FileParseError
-from logging_config import get_logger
+from backend.core.exceptions import FileParseError
+from backend.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -88,8 +88,14 @@ def _read_file(file_path: str, ext: str) -> pd.DataFrame:
     if ext in (".xlsx", ".xls"):
         return pd.read_excel(file_path, engine="openpyxl")
     elif ext == ".csv":
-        # 尝试检测编码
-        return pd.read_csv(file_path, encoding="utf-8", on_bad_lines="skip")
+        # 尝试多种编码（中文 CSV 常见 GBK / GB2312）
+        for encoding in ("utf-8-sig", "utf-8", "gbk", "gb2312", "gb18030", "latin-1"):
+            try:
+                return pd.read_csv(file_path, encoding=encoding, on_bad_lines="skip")
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        # 最后兜底用 latin-1（永远不会 decode 失败）
+        return pd.read_csv(file_path, encoding="latin-1", on_bad_lines="skip")
     elif ext == ".pkl":
         data = pd.read_pickle(file_path)
         if isinstance(data, pd.DataFrame):
@@ -105,16 +111,20 @@ def _read_file(file_path: str, ext: str) -> pd.DataFrame:
 
 def _normalize_rows(rows: list) -> list:
     """将 numpy / pandas 特殊类型转换为 Python 原生类型"""
+    import math
+
     result = []
     for row in rows:
         normalized = []
         for val in row:
             if val is None:
                 normalized.append(None)
+            elif isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                normalized.append(None)
             elif isinstance(val, (np.integer,)):
                 normalized.append(int(val))
             elif isinstance(val, (np.floating,)):
-                if np.isnan(val):
+                if np.isnan(val) or np.isinf(val):
                     normalized.append(None)
                 else:
                     normalized.append(float(val))
@@ -128,3 +138,4 @@ def _normalize_rows(rows: list) -> list:
                 normalized.append(val)
         result.append(normalized)
     return result
+

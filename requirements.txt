@@ -1,9 +1,23 @@
-psycopg2-binary
-requests
-rich
+# Web framework
 fastapi
 uvicorn
-pandas
-openpyxl
-pyarrow
 python-multipart
+pydantic
+
+# LLM client
+requests
+
+# Database drivers (install the one you need)
+psycopg2-binary    # PostgreSQL
+pymysql            # MySQL
+oracledb           # Oracle
+
+# Data processing
+pandas
+numpy
+openpyxl           # Excel (.xlsx/.xls)
+pyarrow            # Parquet
+
+# CLI (interactive mode)
+rich
+

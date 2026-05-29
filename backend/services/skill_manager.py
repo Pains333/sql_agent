@@ -7,8 +7,8 @@ import os
 import re
 from datetime import datetime
 
-import config
-from logging_config import get_logger
+from backend.core import config
+from backend.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 

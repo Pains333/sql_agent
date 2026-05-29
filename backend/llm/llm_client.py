@@ -6,9 +6,9 @@ import json
 import re
 import requests
 
-import config
-from exceptions import LLMConnectionError, LLMTimeoutError, LLMResponseError
-from logging_config import get_logger
+from backend.core import config
+from backend.core.exceptions import LLMConnectionError, LLMTimeoutError, LLMResponseError
+from backend.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
