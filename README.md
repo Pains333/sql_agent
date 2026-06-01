@@ -71,10 +71,6 @@ cd frontend
 npm run dev
 ```
 
-#### 6. 打开浏览器
-
-访问 [http://localhost:5173](http://localhost:5173)，按照配置向导完成初始设置。
-
 ### 📎 附件导入功能
 
 支持上传以下格式的文件并导入到数据库表：
@@ -153,10 +149,6 @@ python3 -m backend.server
 cd frontend
 npm run dev
 ```
-
-#### 6. Open in browser
-
-Visit [http://localhost:5173](http://localhost:5173) and follow the setup wizard.
 
 ### 📎 File Import
 
