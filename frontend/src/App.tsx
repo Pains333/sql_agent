@@ -1,6 +1,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Conversation, ConversationSummary } from './types';
+import { setLang, getLang } from './i18n';
+import type { Lang } from './i18n';
 import {
   listConversations,
   createConversation,
@@ -15,24 +17,48 @@ import ChatArea from './components/ChatArea';
 import './App.css';
 
 export default function App() {
-  const [setupDone, setSetupDone] = useState<boolean | null>(null); // null = loading
+  const [setupDone, setSetupDone] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
     if (saved === 'dark' || saved === 'light') return saved;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
+  const [lang, setLangState] = useState<Lang>(() => {
+    const saved = localStorage.getItem('lang');
+    if (saved === 'zh' || saved === 'en') {
+      setLang(saved);
+      return saved;
+    }
+    return getLang();
+  });
+
+
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  useEffect(() => {
+    setLang(lang);
+    localStorage.setItem('lang', lang);
+  }, [lang]);
+
+
+
   function toggleTheme() {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  }
+
+  function handleLangChange(newLang: Lang) {
+    setLang(newLang);
+    setLangState(newLang);
   }
 
   useEffect(() => {
@@ -100,7 +126,6 @@ export default function App() {
 
   function handleSelect(id: string) {
     loadConversation(id);
-    // Auto-close sidebar on mobile
     if (window.innerWidth <= 768) {
       setSidebarOpen(false);
     }
@@ -118,6 +143,7 @@ export default function App() {
       console.error('删除对话失败:', err);
     }
   }
+
 
   async function handleAutoCreate(_firstMessage: string): Promise<string | null> {
     return _createAndActivate();
@@ -144,7 +170,6 @@ export default function App() {
     }
   }
 
-  // Loading state
   if (setupDone === null) {
     return (
       <div className="app-loading">
@@ -153,15 +178,12 @@ export default function App() {
     );
   }
 
-  // Setup wizard
   if (!setupDone) {
     return <SetupWizard onComplete={handleSetupComplete} />;
   }
 
-  // Main app
   return (
-    <div className="app-layout">
-      {/* Mobile overlay */}
+    <div className="app-layout" key={lang}>
       {sidebarOpen && window.innerWidth <= 768 && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
@@ -176,6 +198,8 @@ export default function App() {
         onToggleCollapse={() => setSidebarOpen(!sidebarOpen)}
         theme={theme}
         onToggleTheme={toggleTheme}
+        lang={lang}
+        onLangChange={handleLangChange}
       />
       <ChatArea
         conversation={activeConv}
@@ -183,6 +207,7 @@ export default function App() {
         onAutoCreate={handleAutoCreate}
         sidebarCollapsed={!sidebarOpen}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        lang={lang}
       />
     </div>
   );

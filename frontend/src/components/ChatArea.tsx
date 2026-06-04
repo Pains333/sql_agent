@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Conversation, Message, UploadResult, DatabaseInfo } from '../types';
 import { sendMessage, sendMessageStream, uploadFile, deleteUpload, executeSQL, cancelExecution, listDatabases, switchDatabase } from '../api';
@@ -14,6 +13,7 @@ interface ChatAreaProps {
   onAutoCreate: (firstMessage: string) => Promise<string | null>;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  lang?: string;
 }
 
 const ACCEPTED_FORMATS = '.xlsx,.xls,.csv,.pkl,.parquet,.json';
@@ -24,7 +24,7 @@ const COMMANDS = [
   { name: '/describe', desc: 'cmd.describe' as const, message: '查看表结构' },
 ];
 
-export default function ChatArea({ conversation, onMessageSent, onAutoCreate, sidebarCollapsed, onToggleSidebar }: ChatAreaProps) {
+export default function ChatArea({ conversation, onMessageSent, onAutoCreate, sidebarCollapsed, onToggleSidebar, lang = 'zh' }: ChatAreaProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [attachment, setAttachment] = useState<UploadResult | null>(null);
@@ -44,6 +44,8 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation?.messages, streamingContent]);
+
+
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -120,7 +122,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
       };
       setPendingUserMessage(optimisticMsg);
 
-      // Try streaming first, fall back to regular
+      // Streaming mode
       try {
         await new Promise<void>((resolve, reject) => {
           abortRef.current = sendMessageStream(convId!, text, currentUploadId, {
@@ -150,15 +152,15 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
               onMessageSent(convId!);
               resolve();
             },
-          });
+          }, lang);
         });
       } catch {
         // Fallback to non-streaming
         setStreamingContent('');
-        await sendMessage(convId, text, currentUploadId);
+        await sendMessage(convId!, text, currentUploadId, lang);
         setAttachment(null);
         setPendingUserMessage(null);
-        onMessageSent(convId);
+        onMessageSent(convId!);
       }
     } catch (err) {
       console.error('Send failed:', err);

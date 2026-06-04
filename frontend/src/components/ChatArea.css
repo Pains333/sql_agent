@@ -225,7 +225,7 @@
   border: none;
   outline: none;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--font-size-base, 14px);
   font-family: 'Inter', sans-serif;
   line-height: 1.55;
   resize: none;

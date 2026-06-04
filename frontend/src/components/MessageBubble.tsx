@@ -1,9 +1,8 @@
-
 import { useState } from 'react';
 import type { Message } from '../types';
-import { paginateQuery } from '../api';
+import { paginateQuery, explainQuery } from '../api';
 import { t } from '../i18n';
-import { User, Bot, AlertTriangle, Check, Copy, Download, XCircle } from 'lucide-react';
+import { User, Bot, AlertTriangle, Check, Copy, Download, XCircle, Search } from 'lucide-react';
 import './MessageBubble.css';
 
 interface MessageBubbleProps {
@@ -41,6 +40,28 @@ export default function MessageBubble({ message, onExecute, onCancel }: MessageB
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  const [explainData, setExplainData] = useState<{ columns: string[]; rows: any[][] } | null>(null);
+  const [explaining, setExplaining] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
+
+  async function handleExplain() {
+    setExplaining(true);
+    setExplainError(null);
+    try {
+      const res = await explainQuery(editedSql, message.plan?.target_db);
+      // Backend might return {"error": "..."} inside the res for gentle errors
+      if ((res as any).error) {
+        setExplainError((res as any).error);
+      } else {
+        setExplainData(res);
+      }
+    } catch (err: any) {
+      setExplainError(err.message || 'Explain failed');
+    } finally {
+      setExplaining(false);
+    }
   }
 
   return (
@@ -103,21 +124,74 @@ export default function MessageBubble({ message, onExecute, onCancel }: MessageB
             ) : (
               <pre className="sql-code">{message.sql}</pre>
             )}
-            {isPending && (
-              <div className="sql-actions">
-                <button
-                  className="sql-execute-btn"
-                  onClick={() => onExecute?.(message.id, editedSql, message.action || 'other', message.plan)}
-                >
-                  {t('sql.execute')}
-                </button>
-                <button
-                  className="sql-cancel-btn"
-                  onClick={() => onCancel?.(message.id)}
-                >
-                  {t('sql.cancel')}
-                </button>
-              </div>
+            {(isPending || message.action === 'query') && (
+              <>
+                <div className="sql-actions">
+                  {isPending && (
+                    <>
+                      <button
+                        className="sql-execute-btn"
+                        onClick={() => onExecute?.(message.id, editedSql, message.action || 'other', message.plan)}
+                      >
+                        {t('sql.execute')}
+                      </button>
+                      <button
+                        className="sql-cancel-btn"
+                        onClick={() => onCancel?.(message.id)}
+                      >
+                        {t('sql.cancel')}
+                      </button>
+                    </>
+                  )}
+                  {message.action === 'query' && (
+                    <button
+                      className="sql-explain-btn"
+                      onClick={handleExplain}
+                      disabled={explaining}
+                    >
+                      <Search size={14} />
+                      {explaining ? '...' : '分析性能'}
+                    </button>
+                  )}
+                </div>
+
+                {(explainData || explainError) && (
+                  <div className="sql-explain-block">
+                    <div className="sql-explain-header">
+                      <span>执行计划分析</span>
+                      <button onClick={() => { setExplainData(null); setExplainError(null); }} className="sql-explain-close">
+                        <XCircle size={14} />
+                      </button>
+                    </div>
+                    {explainError ? (
+                      <div className="sql-explain-error">{explainError}</div>
+                    ) : explainData && (
+                      <div className="sql-explain-content">
+                        {explainData.columns.length === 1 ? (
+                          <pre className="sql-explain-text">{explainData.rows.map(r => r[0]).join('\n')}</pre>
+                        ) : (
+                          <div className="table-responsive">
+                            <table className="sql-result-table">
+                              <thead>
+                                <tr>
+                                  {explainData.columns.map((c, i) => <th key={i}>{c}</th>)}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {explainData.rows.map((row, i) => (
+                                  <tr key={i}>
+                                    {row.map((cell, j) => <td key={j}>{cell === null ? 'NULL' : String(cell)}</td>)}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

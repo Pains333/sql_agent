@@ -171,13 +171,14 @@ class SQLAgent:
             logger.error("数据库扫描失败: %s", e)
             return f"扫描失败: {e}"
 
-    def think(self, user_input: str) -> dict:
+    def think(self, user_input: str, language: str = "zh") -> dict:
         """
         第一阶段：调用 LLM 分析用户输入，生成执行计划
         此方法不涉及用户交互，可安全在 spinner 中运行
 
         Args:
             user_input: 用户的自然语言输入
+            language: 用户界面语言 (zh/en)
 
         Returns:
             思考结果字典（包含 action, sql, explanation 等）
@@ -197,7 +198,7 @@ class SQLAgent:
             # 1. 构建系统提示词，注入当前数据库状态
             skill_context = self.skill.get_summary()
             system_prompt = build_system_prompt(
-                skill_context, self.db.current_db, self.db_type
+                skill_context, self.db.current_db, self.db_type, language
             )
 
             # 2. 调用 LLM

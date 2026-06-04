@@ -1,12 +1,29 @@
 .schema-drawer {
-  width: 280px;
-  min-width: 280px;
+  position: relative;
+  min-width: 200px;
+  max-width: 800px;
   height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
   border-left: 1px solid var(--border);
   animation: drawerSlideIn 0.2s ease-out;
+}
+
+.schema-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  cursor: ew-resize;
+  background-color: transparent;
+  transition: background-color 0.2s;
+  z-index: 10;
+}
+
+.schema-resizer:hover, .schema-resizer:active {
+  background-color: var(--accent);
 }
 
 @keyframes drawerSlideIn {
@@ -50,13 +67,33 @@
 .schema-drawer-db {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   padding: 10px 16px;
   font-size: 12px;
   font-weight: 600;
   color: var(--accent);
   background: var(--accent-bg);
   border-bottom: 1px solid var(--border);
+}
+
+.schema-er-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.schema-er-btn:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 .schema-drawer-body {
@@ -122,7 +159,7 @@
 .schema-col-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   padding: 5px 10px;
   border-radius: 6px;
   font-size: 12px;
@@ -134,16 +171,30 @@
 }
 
 .schema-col-name {
+  display: block;
+  flex: 0 0 30%;
+  min-width: 0;
   font-weight: 500;
   color: var(--text-primary);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
 }
 
 .schema-col-type {
+  display: block;
+  flex: 0 0 30%;
+  min-width: 0;
   color: var(--text-muted);
   font-size: 10px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
 }
 
 .schema-col-constraint {
@@ -152,5 +203,30 @@
   padding: 1px 6px;
   border-radius: 4px;
   background: var(--accent-bg);
+  white-space: nowrap;
   margin-left: auto;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.schema-preview-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  opacity: 0.5;
+}
+
+.schema-preview-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--accent);
+  opacity: 1;
 }

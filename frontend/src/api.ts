@@ -1,5 +1,4 @@
-
-import type { Conversation, ConversationSummary, Message, OllamaModel, SetupConfig, SetupResult, UploadResult, DatabaseInfo, HealthStatus, TableColumn, PaginatedResult } from './types';
+import type { Conversation, ConversationSummary, Message, OllamaModel, SetupConfig, SetupResult, UploadResult, DatabaseInfo, HealthStatus, TableColumn, PaginatedResult, ERDiagramData } from './types';
 
 const BASE = '/api';
 
@@ -56,10 +55,10 @@ export async function deleteConversation(id: string): Promise<void> {
 }
 
 
-export async function sendMessage(convId: string, content: string, uploadId?: string): Promise<Message> {
+export async function sendMessage(convId: string, content: string, uploadId?: string, language: string = 'zh'): Promise<Message> {
   return request<Message>(`/conversations/${convId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content, upload_id: uploadId }),
+    body: JSON.stringify({ content, upload_id: uploadId, language }),
   });
 }
 
@@ -102,13 +101,14 @@ export function sendMessageStream(
     onError: (err: string) => void;
     onDone: () => void;
   },
+  language: string = 'zh',
 ): AbortController {
   const controller = new AbortController();
 
   fetch(`${BASE}/conversations/${convId}/messages/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, upload_id: uploadId }),
+    body: JSON.stringify({ content, upload_id: uploadId, language }),
     signal: controller.signal,
   })
     .then(async (res) => {
@@ -183,6 +183,10 @@ export async function describeTable(db: string, table: string): Promise<{ databa
   return request(`/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}`);
 }
 
+export async function getErDiagram(db: string): Promise<ERDiagramData> {
+  return request<ERDiagramData>(`/databases/${encodeURIComponent(db)}/er-diagram`);
+}
+
 
 export async function healthCheck(): Promise<HealthStatus> {
   return request<HealthStatus>('/health');
@@ -193,6 +197,13 @@ export async function paginateQuery(sql: string, page: number, pageSize: number)
   return request<PaginatedResult>('/query/paginate', {
     method: 'POST',
     body: JSON.stringify({ sql, page, page_size: pageSize }),
+  });
+}
+
+export async function explainQuery(sql: string, database?: string): Promise<{ columns: string[]; rows: any[][] }> {
+  return request<{ columns: string[]; rows: any[][] }>('/query/explain', {
+    method: 'POST',
+    body: JSON.stringify({ sql, database }),
   });
 }
 
@@ -219,4 +230,9 @@ export async function deleteUpload(uploadId: string): Promise<void> {
 
 export async function getSkill(): Promise<{ content: string }> {
   return request<{ content: string }>('/skill');
+}
+export async function previewTable(db: string, table: string): Promise<{ database: string; table: string; columns: string[]; rows: any[][] }> {
+  const res = await fetch(`${BASE}/databases/${db}/tables/${table}/preview`);
+  if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  return res.json();
 }

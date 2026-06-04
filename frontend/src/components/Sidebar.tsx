@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import type { ConversationSummary, HealthStatus } from '../types';
+import type { Lang } from '../i18n';
 import { t, getLang } from '../i18n';
 import { healthCheck } from '../api';
 import { Plus, LogOut, MessageSquare, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -19,6 +20,8 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  lang: Lang;
+  onLangChange: (lang: Lang) => void;
 }
 
 export default function Sidebar({
@@ -32,6 +35,8 @@ export default function Sidebar({
   onToggleCollapse,
   theme,
   onToggleTheme,
+  lang,
+  onLangChange,
 }: SidebarProps) {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -152,6 +157,8 @@ export default function Sidebar({
         <SettingsPanel
           theme={theme}
           onToggleTheme={onToggleTheme}
+          lang={lang}
+          onLangChange={onLangChange}
           onClose={() => setSettingsOpen(false)}
         />
       )}

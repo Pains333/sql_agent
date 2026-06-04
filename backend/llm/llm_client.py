@@ -37,7 +37,7 @@ class LLMClient:
             self.model = model or config.OLLAMA_MODEL
             self.api_key = ""
         else:
-            self.base_url = base_url.rstrip("/")
+            self.base_url = base_url.rstrip("/") if base_url else "https://api.openai.com"
             self.model = model
             self.api_key = api_key
 

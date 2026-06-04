@@ -61,7 +61,7 @@
   box-shadow: var(--shadow-sm);
 }
 
-.bubble-content { font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+.bubble-content { font-size: var(--font-size-base, 14px); white-space: pre-wrap; word-break: break-word; }
 
 /* Action Badge */
 .action-badge {
@@ -116,7 +116,7 @@
   padding: 14px 16px;
   margin: 0;
   font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
-  font-size: 13px;
+  font-size: calc(var(--font-size-base, 14px) - 1px);
   line-height: 1.6;
   color: var(--sql-text);
   white-space: pre-wrap;
@@ -130,7 +130,7 @@
   padding: 14px 16px;
   margin: 0;
   font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
-  font-size: 13px;
+  font-size: calc(var(--font-size-base, 14px) - 1px);
   line-height: 1.6;
   color: var(--sql-text);
   background: transparent;
@@ -266,9 +266,9 @@
 }
 
 .result-content { padding: 10px 14px; }
-.result-text { font-size: 13px; color: var(--success); }
+.result-text { font-size: calc(var(--font-size-base, 14px) - 1px); color: var(--success); }
 .result-table-wrapper { overflow-x: auto; }
-.result-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.result-table { width: 100%; border-collapse: collapse; font-size: calc(var(--font-size-base, 14px) - 2px); }
 
 .result-table th {
   padding: 8px 12px;
@@ -358,4 +358,96 @@
   font-size: 11px;
   opacity: 0.45;
   text-align: right;
+}
+
+/* Explain feature styles */
+.sql-explain-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  border: 1px solid var(--sql-border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+  color: var(--sql-header-text);
+}
+
+.sql-explain-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.sql-explain-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sql-explain-block {
+  margin-top: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sql-explain-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-surface-hover);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.sql-explain-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.sql-explain-close:hover {
+  background: var(--bg-inset);
+  color: var(--text-primary);
+}
+
+.sql-explain-error {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--error, #e53e3e);
+  background: var(--error-bg, #fee2e2);
+}
+
+.sql-explain-content {
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.sql-explain-text {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
 }

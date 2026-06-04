@@ -218,21 +218,70 @@ class DBClient:
         return [row[0] for row in rows]
 
     def describe_table(self, table_name: str, database: str = None) -> list:
-        """
-        获取表结构详情
-
-        Returns:
-            [(column_name, data_type, constraints), ...]
-        """
+        """获取指定表的所有列信息，返回 [(col_name, data_type, constraints), ...]"""
         self._ensure_database(database)
+        if self.db_type == "postgresql":
+            return self._describe_table_pg(table_name)
+        elif self.db_type == "mysql":
+            return self._describe_table_mysql(table_name)
+        elif self.db_type == "oracle":
+            return self._describe_table_oracle(table_name)
+        return []
 
-        describe_methods = {
-            "postgresql": self._describe_table_pg,
-            "mysql": self._describe_table_mysql,
-            "oracle": self._describe_table_oracle,
-        }
-        method = describe_methods.get(self.db_type)
-        return method(table_name) if method else []
+    def get_foreign_keys(self, database: str = None) -> list:
+        """获取外键关联信息，返回 [{'source_table', 'source_column', 'target_table', 'target_column'}, ...]"""
+        self._ensure_database(database)
+        if self.db_type == "postgresql":
+            sql = """
+                SELECT
+                    tc.table_name AS source_table,
+                    kcu.column_name AS source_column,
+                    ccu.table_name AS target_table,
+                    ccu.column_name AS target_column
+                FROM
+                    information_schema.table_constraints AS tc
+                    JOIN information_schema.key_column_usage AS kcu
+                      ON tc.constraint_name = kcu.constraint_name
+                      AND tc.table_schema = kcu.table_schema
+                    JOIN information_schema.constraint_column_usage AS ccu
+                      ON ccu.constraint_name = tc.constraint_name
+                      AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY';
+            """
+            rows = self._fetchall(sql)
+            return [
+                {
+                    "source_table": r[0],
+                    "source_column": r[1],
+                    "target_table": r[2],
+                    "target_column": r[3],
+                }
+                for r in rows
+            ]
+        elif self.db_type == "mysql":
+            sql = """
+                SELECT
+                    TABLE_NAME AS source_table,
+                    COLUMN_NAME AS source_column,
+                    REFERENCED_TABLE_NAME AS target_table,
+                    REFERENCED_COLUMN_NAME AS target_column
+                FROM
+                    INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                WHERE
+                    TABLE_SCHEMA = %s
+                    AND REFERENCED_TABLE_NAME IS NOT NULL;
+            """
+            rows = self._fetchall(sql, (self.current_db,))
+            return [
+                {
+                    "source_table": r[0],
+                    "source_column": r[1],
+                    "target_table": r[2],
+                    "target_column": r[3],
+                }
+                for r in rows
+            ]
+        return []
 
     # --- PostgreSQL 表结构查询 ---
 

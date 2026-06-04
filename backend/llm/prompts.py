@@ -48,10 +48,12 @@ create_db | drop_db | create_table | drop_table | alter_table | query | insert |
 {skill_context}
 
 ## 当前数据库：{current_db}
+
+## 回复语言：{language_instruction}
 """
 
 
-def build_system_prompt(skill_context: str, current_db: str, db_type: str = "postgresql") -> str:
+def build_system_prompt(skill_context: str, current_db: str, db_type: str = "postgresql", language: str = "zh") -> str:
     """
     构建完整的系统提示词
 
@@ -59,6 +61,7 @@ def build_system_prompt(skill_context: str, current_db: str, db_type: str = "pos
         skill_context: skill.md 的内容摘要
         current_db: 当前连接的数据库名
         db_type: 数据库类型
+        language: 用户界面语言 (zh/en)
 
     Returns:
         完整的系统提示词
@@ -71,9 +74,16 @@ def build_system_prompt(skill_context: str, current_db: str, db_type: str = "pos
 
     db_specific_rules = DB_SPECIFIC_RULES.get(db_type, DB_SPECIFIC_RULES["postgresql"])
 
+    language_instruction = (
+        "Please respond in English. Use English for all explanations, field names in explanation can remain technical."
+        if language == "en"
+        else "请用中文回复。"
+    )
+
     return SYSTEM_PROMPT.format(
         db_type_display=db_type_display,
         db_specific_rules=db_specific_rules,
         skill_context=skill_context,
         current_db=current_db,
+        language_instruction=language_instruction,
     )

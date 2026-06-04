@@ -1,26 +1,32 @@
-
 import { useEffect, useRef } from 'react';
+import type { Lang } from '../i18n';
 import { t } from '../i18n';
-import { Settings, X, Moon, Sun } from 'lucide-react';
+import {
+  Settings, X, Moon, Sun, Globe,
+} from 'lucide-react';
 import './SettingsPanel.css';
 
 interface SettingsPanelProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  lang: Lang;
+  onLangChange: (lang: Lang) => void;
   onClose: () => void;
 }
 
-export default function SettingsPanel({ theme, onToggleTheme, onClose }: SettingsPanelProps) {
+export default function SettingsPanel({
+  theme, onToggleTheme,
+  lang, onLangChange,
+  onClose,
+}: SettingsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Close when clicking outside
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         onClose();
       }
     }
-    // Delay to avoid the opening click
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClick);
     }, 100);
@@ -30,7 +36,6 @@ export default function SettingsPanel({ theme, onToggleTheme, onClose }: Setting
     };
   }, [onClose]);
 
-  // Close on Escape
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
@@ -38,6 +43,7 @@ export default function SettingsPanel({ theme, onToggleTheme, onClose }: Setting
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
+
 
   return (
     <>
@@ -54,14 +60,32 @@ export default function SettingsPanel({ theme, onToggleTheme, onClose }: Setting
         </div>
 
         <div className="settings-body">
-          {/* Dark Mode Toggle */}
+          {/* 1. Language */}
           <div className="settings-item">
             <span className="settings-item-label">
-              {theme === 'dark' ? (
-                <Moon size={16} />
-              ) : (
-                <Sun size={16} />
-              )}
+              <Globe size={16} />
+              {t('settings.language')}
+            </span>
+            <div className="lang-switch">
+              <button
+                className={`lang-btn ${lang === 'zh' ? 'active' : ''}`}
+                onClick={() => onLangChange('zh')}
+              >
+                中文
+              </button>
+              <button
+                className={`lang-btn ${lang === 'en' ? 'active' : ''}`}
+                onClick={() => onLangChange('en')}
+              >
+                EN
+              </button>
+            </div>
+          </div>
+
+          {/* 2. Dark Mode */}
+          <div className="settings-item">
+            <span className="settings-item-label">
+              {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
               {t('settings.darkMode')}
             </span>
             <label className="toggle-switch">
@@ -74,9 +98,7 @@ export default function SettingsPanel({ theme, onToggleTheme, onClose }: Setting
             </label>
           </div>
 
-          <div className="settings-version">
-            SQL Agent v2.0.0
-          </div>
+
         </div>
       </div>
     </>

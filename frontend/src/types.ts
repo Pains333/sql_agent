@@ -95,3 +95,17 @@ export interface PaginatedResult {
   page: number;
   page_size: number;
 }
+
+export interface ERDiagramData {
+  database: string;
+  tables: {
+    name: string;
+    columns: TableColumn[];
+  }[];
+  relationships: {
+    source_table: string;
+    source_column: string;
+    target_table: string;
+    target_column: string;
+  }[];
+}
