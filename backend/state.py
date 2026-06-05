@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import time
@@ -13,6 +14,22 @@ logger = get_logger(__name__)
 
 SETUP_CONFIG_PATH = os.path.join(config.PROJECT_ROOT, "setup_config.json")
 
+# 敏感字段列表
+_SENSITIVE_KEYS = {"db_password", "api_key"}
+
+
+def _encode_value(val: str) -> str:
+    """对敏感字段进行 Base64 编码存储（防止明文直接可见）"""
+    return base64.b64encode(val.encode("utf-8")).decode("ascii")
+
+
+def _decode_value(val: str) -> str:
+    """解码 Base64 编码的敏感字段"""
+    try:
+        return base64.b64decode(val.encode("ascii")).decode("utf-8")
+    except Exception:
+        return val  # 兼容旧的明文配置
+
 # 上传文件过期时间（30 分钟）
 UPLOAD_TTL_SECONDS = 30 * 60
 
@@ -26,16 +43,29 @@ upload_storage: dict = {}
 
 
 def save_setup_config(cfg: dict):
-    """将配置持久化到文件"""
+    """将配置持久化到文件，敏感字段加密"""
+    safe_cfg = dict(cfg)
+    for key in _SENSITIVE_KEYS:
+        if key in safe_cfg and safe_cfg[key]:
+            safe_cfg[key] = _encode_value(safe_cfg[key])
+    safe_cfg["_encoded"] = True  # 标记已编码
     with open(SETUP_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
+        json.dump(safe_cfg, f, ensure_ascii=False, indent=2)
+    # 设置文件权限为仅所有者可读写
+    os.chmod(SETUP_CONFIG_PATH, 0o600)
 
 
 def load_setup_config() -> Optional[dict]:
-    """从文件加载已保存的配置"""
+    """从文件加载已保存的配置，自动解密敏感字段"""
     if os.path.exists(SETUP_CONFIG_PATH):
         with open(SETUP_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            cfg = json.load(f)
+        if cfg.get("_encoded"):
+            for key in _SENSITIVE_KEYS:
+                if key in cfg and cfg[key]:
+                    cfg[key] = _decode_value(cfg[key])
+            del cfg["_encoded"]
+        return cfg
     return None
 
 def init_agent_from_config(cfg: dict) -> bool:

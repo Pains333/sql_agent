@@ -15,6 +15,28 @@ from backend.core.logging_config import get_logger
 logger = get_logger(__name__)
 router = APIRouter()
 
+# SQL 关键字到 action 的映射（后端重新判断，不信任前端）
+_SQL_ACTION_MAP = [
+    (r'^\s*(CREATE\s+TABLE)', 'create_table'),
+    (r'^\s*(DROP\s+TABLE)', 'drop_table'),
+    (r'^\s*(ALTER\s+TABLE)', 'alter_table'),
+    (r'^\s*(CREATE\s+DATABASE)', 'create_db'),
+    (r'^\s*(DROP\s+DATABASE)', 'drop_db'),
+    (r'^\s*(INSERT)', 'insert'),
+    (r'^\s*(UPDATE)', 'update'),
+    (r'^\s*(DELETE)', 'delete'),
+    (r'^\s*(SELECT|WITH)', 'query'),
+]
+
+
+def _detect_action(sql: str) -> str:
+    """根据 SQL 内容重新判断 action 类型，防止前端篡改"""
+    sql_upper = sql.strip()
+    for pattern, action in _SQL_ACTION_MAP:
+        if re.match(pattern, sql_upper, re.IGNORECASE):
+            return action
+    return 'other'
+
 
 def _build_ai_response(conv_id: str, result: dict):
     """根据执行结果构建 AI 回复消息"""
@@ -253,8 +275,11 @@ def execute_sql_endpoint(conv_id: str, req: ExecuteRequest):
 
             return _handle_import_file(ag, conv_id, plan, file_data, req.upload_id)
 
+        # 后端重新检测 action，不信任前端传入的 action
+        detected_action = _detect_action(req.sql)
+
         plan = {
-            "action": req.action,
+            "action": detected_action,
             "sql": req.sql,
             "explanation": "",
             "target_db": req.target_db or "",
@@ -271,12 +296,15 @@ def execute_sql_endpoint(conv_id: str, req: ExecuteRequest):
 
         return _build_ai_response(conv_id, result)
 
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error("执行 SQL 失败: %s", e, exc_info=True)
         return store.add_message(
             conv_id,
             role="assistant",
             content="执行失败",
-            error=str(e),
+            error="执行失败，请检查 SQL 语法或数据库连接",
         )
 
 

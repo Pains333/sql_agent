@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+import tempfile
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 
@@ -13,8 +14,10 @@ router = APIRouter()
 
 @router.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """上传文件并解析，支持 xlsx/xls/csv/pkl/parquet/json"""
+    """上传文件并解析，支持 xlsx/xls/csv/parquet/json"""
     filename = file.filename or "unknown"
+    # 清理文件名，防止路径遍历攻击
+    filename = os.path.basename(filename)
     ext = os.path.splitext(filename)[1].lower()
 
     if ext not in SUPPORTED_EXTENSIONS:
@@ -24,9 +27,8 @@ async def upload_file(file: UploadFile = File(...)):
         )
 
     try:
-        tmp_dir = os.path.join(config.PROJECT_ROOT, ".uploads")
-        os.makedirs(tmp_dir, exist_ok=True)
-
+        # 使用系统临时目录，避免暴露项目结构
+        tmp_dir = tempfile.mkdtemp(prefix="sqlagent_")
         tmp_path = os.path.join(tmp_dir, f"{uuid.uuid4().hex}{ext}")
         content = await file.read()
         with open(tmp_path, "wb") as f:

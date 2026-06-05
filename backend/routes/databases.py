@@ -1,10 +1,26 @@
+import re
 import requests
 from fastapi import APIRouter, HTTPException
 
 from backend.models import SwitchDatabaseRequest, PaginateRequest, ExplainRequest
 from backend.state import require_agent, agent as _agent_ref, store
+from backend.core.logging_config import get_logger
 
+logger = get_logger(__name__)
 router = APIRouter()
+
+
+def _validate_identifier(name: str) -> str:
+    """校验数据库/表标识符，防止 SQL 注入"""
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]{0,63}$', name):
+        raise HTTPException(status_code=400, detail="无效的标识符名称")
+    return name
+
+
+def _safe_error(e: Exception, context: str = "操作") -> HTTPException:
+    """返回脱敏的错误信息，详细错误仅记录日志"""
+    logger.error("%s失败: %s", context, e, exc_info=True)
+    return HTTPException(status_code=500, detail=f"{context}失败，请检查日志")
 
 
 @router.get("/api/databases")
@@ -16,7 +32,7 @@ def list_databases():
         current = ag.db.current_db
         return {"databases": databases, "current": current}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e, "获取数据库列表")
 
 
 @router.post("/api/databases/switch")
@@ -32,24 +48,27 @@ def switch_database(req: SwitchDatabaseRequest):
             "current": ag.db.current_db,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e, "切换数据库")
 
 
 @router.get("/api/databases/{db}/tables")
 def get_tables(db: str):
     """获取指定数据库的表列表"""
     ag = require_agent()
+    _validate_identifier(db)
     try:
         tables = ag.db.list_tables(db)
         return {"database": db, "tables": tables}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e, "获取表列表")
 
 
 @router.get("/api/databases/{db}/tables/{table}")
 def describe_table_endpoint(db: str, table: str):
     """获取表结构详情"""
     ag = require_agent()
+    _validate_identifier(db)
+    _validate_identifier(table)
     try:
         columns = ag.db.describe_table(table, db)
         return {
@@ -61,13 +80,14 @@ def describe_table_endpoint(db: str, table: str):
             ],
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e, "获取表结构")
 
 
 @router.get("/api/databases/{db}/er-diagram")
 def get_er_diagram(db: str):
     """获取整个数据库的 ER 图结构（表、字段、关系）"""
     ag = require_agent()
+    _validate_identifier(db)
     try:
         ag.db._ensure_database(db)
         tables_names = ag.db.list_tables(db)
@@ -91,16 +111,22 @@ def get_er_diagram(db: str):
             "relationships": relationships
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e, "获取ER图")
 
 
 @router.get("/api/databases/{db}/tables/{table}/preview")
 def preview_table_endpoint(db: str, table: str):
     """预览表数据 (前 50 行)"""
     ag = require_agent()
+    _validate_identifier(db)
+    _validate_identifier(table)
     try:
+        # 白名单校验：确认表确实存在
+        valid_tables = ag.db.list_tables(db)
+        if table not in valid_tables:
+            raise HTTPException(status_code=404, detail="表不存在")
+
         ag.db._ensure_database(db)
-        # Handle syntax per db_type
         if ag.db.db_type == "oracle":
             sql = f"SELECT * FROM {table} WHERE ROWNUM <= 50"
         else:
@@ -108,7 +134,6 @@ def preview_table_endpoint(db: str, table: str):
             
         columns, rows = ag.db.execute_query(sql)
         
-        # Serialize datetime/bytes/None to string for JSON
         serializable_rows = [
             [str(v) if v is not None else None for v in row]
             for row in rows
@@ -120,8 +145,10 @@ def preview_table_endpoint(db: str, table: str):
             "columns": columns,
             "rows": serializable_rows,
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e, "预览表数据")
 
 
 @router.get("/api/health")
@@ -190,7 +217,7 @@ def paginate_query(req: PaginateRequest):
             "page_size": req.page_size,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e, "分页查询")
 
 
 @router.get("/api/skill")

@@ -25,6 +25,21 @@ class ConversationStore:
         """获取对话文件路径"""
         return os.path.join(CONVERSATIONS_DIR, f"{conv_id}.json")
 
+    def cleanup_expired(self, max_days: int = 1):
+        """清理超过 max_days 天没有更新的对话数据"""
+        now = datetime.now()
+        for filename in os.listdir(CONVERSATIONS_DIR):
+            if not filename.endswith(".json"):
+                continue
+            filepath = os.path.join(CONVERSATIONS_DIR, filename)
+            try:
+                # 获取文件最后修改时间
+                mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
+                if (now - mtime).days >= max_days:
+                    os.remove(filepath)
+            except Exception:
+                pass
+
     def create_conversation(self, title: str = "新对话") -> dict:
         """
         创建新对话
@@ -35,6 +50,9 @@ class ConversationStore:
         Returns:
             新创建的对话对象
         """
+        # 每次创建新对话时，顺便清理一下过期的对话文件（大于1天）
+        self.cleanup_expired(max_days=1)
+        
         conv_id = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
         conversation = {
@@ -44,8 +62,10 @@ class ConversationStore:
             "updated_at": now,
             "messages": [],
         }
-        with open(self._get_path(conv_id), "w", encoding="utf-8") as f:
+        path = self._get_path(conv_id)
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(conversation, f, ensure_ascii=False, indent=2)
+        os.chmod(path, 0o600)
         return conversation
 
     def list_conversations(self) -> list:
@@ -100,8 +120,10 @@ class ConversationStore:
             return None
         result = updater(conversation)
         conversation["updated_at"] = datetime.now().isoformat()
-        with open(self._get_path(conv_id), "w", encoding="utf-8") as f:
+        path = self._get_path(conv_id)
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(conversation, f, ensure_ascii=False, indent=2)
+        os.chmod(path, 0o600)
         return result
 
     def add_message(

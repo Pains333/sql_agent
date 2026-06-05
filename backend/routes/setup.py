@@ -110,4 +110,4 @@ def submit_setup(req: SetupRequest):
                 pass
             st.agent = None
         st.setup_done = False
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="配置初始化失败，请检查数据库连接信息和模型配置")

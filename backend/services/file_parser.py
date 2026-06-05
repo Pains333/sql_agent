@@ -14,7 +14,26 @@ from backend.core.logging_config import get_logger
 logger = get_logger(__name__)
 
 # 支持的文件扩展名
-SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv", ".pkl", ".parquet", ".json"}
+SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv", ".parquet", ".json"}
+
+# 文件魔数校验（防止伪造扩展名）
+_MAGIC_BYTES = {
+    ".xlsx": [b'PK\x03\x04'],          # ZIP (Office Open XML)
+    ".xls":  [b'\xd0\xcf\x11\xe0'],    # OLE2 Compound
+    ".parquet": [b'PAR1'],
+    ".json": None,                       # JSON 无固定魔数，跳过
+    ".csv":  None,                       # CSV 纯文本，跳过
+}
+
+
+def _validate_magic_bytes(file_path: str, ext: str) -> bool:
+    """校验文件头魔数是否与扩展名匹配"""
+    expected = _MAGIC_BYTES.get(ext)
+    if expected is None:
+        return True  # 纯文本格式跳过校验
+    with open(file_path, "rb") as f:
+        header = f.read(8)
+    return any(header.startswith(magic) for magic in expected)
 
 # 上传文件大小限制 (50MB)
 MAX_FILE_SIZE = 50 * 1024 * 1024
@@ -48,6 +67,10 @@ def parse_file(file_path: str, original_filename: str) -> dict:
     file_size = os.path.getsize(file_path)
     if file_size > MAX_FILE_SIZE:
         raise FileParseError(f"文件大小 ({file_size // 1024 // 1024}MB) 超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
+
+    # 校验文件魔数
+    if not _validate_magic_bytes(file_path, ext):
+        raise FileParseError(f"文件内容与扩展名 {ext} 不匹配，可能是伪造文件")
 
     try:
         df = _read_file(file_path, ext)
@@ -96,11 +119,6 @@ def _read_file(file_path: str, ext: str) -> pd.DataFrame:
                 continue
         # 最后兜底用 latin-1（永远不会 decode 失败）
         return pd.read_csv(file_path, encoding="latin-1", on_bad_lines="skip")
-    elif ext == ".pkl":
-        data = pd.read_pickle(file_path)
-        if isinstance(data, pd.DataFrame):
-            return data
-        raise FileParseError("PKL 文件中的数据不是 DataFrame 格式")
     elif ext == ".parquet":
         return pd.read_parquet(file_path)
     elif ext == ".json":
