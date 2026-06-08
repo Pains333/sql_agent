@@ -15,6 +15,8 @@ const DB_DEFAULT_PORTS: Record<string, number> = {
   postgresql: 5432,
   mysql: 3306,
   oracle: 1521,
+  sqlite: 0,
+  duckdb: 0,
 };
 
 export default function SetupWizard({ onComplete }: SetupWizardProps) {
@@ -29,11 +31,12 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [apiModel, setApiModel] = useState('');
-  const [dbType, setDbType] = useState<'postgresql' | 'mysql' | 'oracle'>('postgresql');
+  const [dbType, setDbType] = useState<'postgresql' | 'mysql' | 'oracle' | 'sqlite' | 'duckdb'>('postgresql');
   const [dbHost, setDbHost] = useState('localhost');
   const [dbPort, setDbPort] = useState(5432);
   const [dbUser, setDbUser] = useState('');
   const [dbPassword, setDbPassword] = useState('');
+  const [dbFilePath, setDbFilePath] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -84,8 +87,13 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       if (!apiKey.trim()) { setError(t('error.apiKeyRequired')); return; }
       if (!apiModel.trim()) { setError(t('error.apiModelRequired')); return; }
     }
-    if (!dbUser.trim()) { setError(t('error.dbUserRequired')); return; }
-    if (!dbPassword.trim()) { setError(t('error.dbPasswordRequired')); return; }
+    
+    if (dbType === 'sqlite' || dbType === 'duckdb') {
+      if (!dbFilePath.trim()) { setError(t('step3.dbFilePath') + ' is required'); return; }
+    } else {
+      if (!dbUser.trim()) { setError(t('error.dbUserRequired')); return; }
+      if (!dbPassword.trim()) { setError(t('error.dbPasswordRequired')); return; }
+    }
 
     setLoading(true);
 
@@ -101,6 +109,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       db_port: dbPort,
       db_user: dbUser,
       db_password: dbPassword,
+      db_file_path: dbFilePath,
     };
 
     try {
@@ -259,66 +268,83 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                 <select
                   className="form-select"
                   value={dbType}
-                  onChange={(e) => setDbType(e.target.value as 'postgresql' | 'mysql' | 'oracle')}
+                  onChange={(e) => setDbType(e.target.value as 'postgresql' | 'mysql' | 'oracle' | 'sqlite' | 'duckdb')}
                 >
                   <option value="postgresql">PostgreSQL</option>
                   <option value="mysql">MySQL</option>
                   <option value="oracle">Oracle</option>
+                  <option value="sqlite">SQLite</option>
+                  <option value="duckdb">DuckDB</option>
                 </select>
               </div>
 
-              <div className="form-row">
-                <div className="form-group flex-2">
-                  <label className="form-label">{t('step3.host')}</label>
+              {(dbType === 'sqlite' || dbType === 'duckdb') ? (
+                <div className="form-group">
+                  <label className="form-label">{t('step3.dbFilePath')}</label>
                   <input
                     className="form-input"
                     type="text"
-                    value={dbHost}
-                    onChange={(e) => setDbHost(e.target.value)}
-                    placeholder="localhost"
+                    value={dbFilePath}
+                    onChange={(e) => setDbFilePath(e.target.value)}
+                    placeholder={dbType === 'sqlite' ? '输入 .sqlite 或 .db 文件路径' : '输入 .duckdb 或 .db 文件路径'}
                   />
                 </div>
-                <div className="form-group flex-1">
-                  <label className="form-label">{t('step3.port')}</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={dbPort}
-                    onChange={(e) => setDbPort(Number(e.target.value))}
-                  />
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div className="form-row">
+                    <div className="form-group flex-2">
+                      <label className="form-label">{t('step3.host')}</label>
+                      <input
+                        className="form-input"
+                        type="text"
+                        value={dbHost}
+                        onChange={(e) => setDbHost(e.target.value)}
+                        placeholder="localhost"
+                      />
+                    </div>
+                    <div className="form-group flex-1">
+                      <label className="form-label">{t('step3.port')}</label>
+                      <input
+                        className="form-input"
+                        type="number"
+                        value={dbPort}
+                        onChange={(e) => setDbPort(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
 
-              <div className="form-group">
-                <label className="form-label">{t('step3.user')}</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  value={dbUser}
-                  onChange={(e) => setDbUser(e.target.value)}
-                  placeholder={t('step3.userPlaceholder')}
-                />
-              </div>
+                  <div className="form-group">
+                    <label className="form-label">{t('step3.user')}</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      value={dbUser}
+                      onChange={(e) => setDbUser(e.target.value)}
+                      placeholder={t('step3.userPlaceholder')}
+                    />
+                  </div>
 
-              <div className="form-group">
-                <label className="form-label">{t('step3.password')}</label>
-                <div className="input-with-toggle">
-                  <input
-                    className="form-input"
-                    type={showPassword ? 'text' : 'password'}
-                    value={dbPassword}
-                    onChange={(e) => setDbPassword(e.target.value)}
-                    placeholder={t('step3.passwordPlaceholder')}
-                  />
-                  <button
-                    className="toggle-btn"
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
+                  <div className="form-group">
+                    <label className="form-label">{t('step3.password')}</label>
+                    <div className="input-with-toggle">
+                      <input
+                        className="form-input"
+                        type={showPassword ? 'text' : 'password'}
+                        value={dbPassword}
+                        onChange={(e) => setDbPassword(e.target.value)}
+                        placeholder={t('step3.passwordPlaceholder')}
+                      />
+                      <button
+                        className="toggle-btn"
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

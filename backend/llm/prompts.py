@@ -23,6 +23,22 @@ DB_SPECIFIC_RULES = {
 - 表名和字段名默认大写
 - 语句末尾不要加分号
 """,
+    "sqlite": """
+- 自增主键用 INTEGER PRIMARY KEY AUTOINCREMENT
+- 字符串类型用 TEXT
+- 支持的类型: TEXT, INTEGER, REAL, BLOB, NUMERIC
+- 表名用英文小写
+- 不支持 ALTER COLUMN，只支持 ADD COLUMN
+- 不支持 RIGHT JOIN 和 FULL OUTER JOIN
+""",
+    "duckdb": """
+- 自增主键用 INTEGER PRIMARY KEY（DuckDB 自动处理自增）
+- 支持标准 SQL 语法，与 PostgreSQL 非常接近
+- 支持 VARCHAR, INTEGER, DOUBLE, BOOLEAN, DATE, TIMESTAMP 等类型
+- 表名用英文小写
+- 支持窗口函数和 CTE
+- 支持直接查询 CSV/Parquet 文件
+""",
 }
 
 SYSTEM_PROMPT = """你是 {db_type_display} 数据库助手。用户用自然语言描述需求，你生成对应的 SQL。
@@ -40,6 +56,7 @@ create_db | drop_db | create_table | drop_table | alter_table | query | insert |
 4. 一次只返回一个 JSON
 5. DROP 操作在 explanation 中警告
 6. 当用户消息提到"附件"或"文件"且要求写入某个表时，action 用 import_file，sql 留空，explanation 中说明目标表名，database 填目标数据库名。JSON 格式：{{"action":"import_file","sql":"","explanation":"将附件数据导入到 xxx 表","database":"...","target_table":"表名"}}
+7. 必须严格遵守并优先应用下方【业务规则与数据字典】中的名词定义、SQL 示例和字段枚举映射。如果用户的意图匹配了业务术语，请直接使用字典中提供的 SQL 或逻辑。
 
 ## {db_type_display} 特定规则：
 {db_specific_rules}
@@ -47,13 +64,15 @@ create_db | drop_db | create_table | drop_table | alter_table | query | insert |
 ## 当前数据库状态：
 {skill_context}
 
+{business_rules}
+
 ## 当前数据库：{current_db}
 
 ## 回复语言：{language_instruction}
 """
 
 
-def build_system_prompt(skill_context: str, current_db: str, db_type: str = "postgresql", language: str = "zh") -> str:
+def build_system_prompt(skill_context: str, current_db: str, db_type: str = "postgresql", language: str = "zh", business_rules: str = "") -> str:
     """
     构建完整的系统提示词
 
@@ -62,6 +81,7 @@ def build_system_prompt(skill_context: str, current_db: str, db_type: str = "pos
         current_db: 当前连接的数据库名
         db_type: 数据库类型
         language: 用户界面语言 (zh/en)
+        business_rules: 业务规则字典
 
     Returns:
         完整的系统提示词
@@ -70,6 +90,8 @@ def build_system_prompt(skill_context: str, current_db: str, db_type: str = "pos
         "postgresql": "PostgreSQL",
         "mysql": "MySQL",
         "oracle": "Oracle",
+        "sqlite": "SQLite",
+        "duckdb": "DuckDB",
     }.get(db_type, "PostgreSQL")
 
     db_specific_rules = DB_SPECIFIC_RULES.get(db_type, DB_SPECIFIC_RULES["postgresql"])
@@ -84,6 +106,82 @@ def build_system_prompt(skill_context: str, current_db: str, db_type: str = "pos
         db_type_display=db_type_display,
         db_specific_rules=db_specific_rules,
         skill_context=skill_context,
+        business_rules=business_rules,
         current_db=current_db,
         language_instruction=language_instruction,
     )
+
+
+# ── Auto-Fix 提示词 ──────────────────────────────────────────────
+
+AUTO_FIX_PROMPT = """你是 {db_type_display} 数据库助手。之前生成的 SQL 执行失败了，请根据错误信息修正 SQL。
+
+## 失败的 SQL：
+```sql
+{failed_sql}
+```
+
+## 数据库返回的错误：
+{error_message}
+
+## 当前数据库状态：
+{skill_context}
+
+## 当前数据库：{current_db}
+
+## 修正要求：
+1. 仔细分析错误原因（拼写错误？表/列不存在？语法问题？）
+2. 参考当前数据库状态中的真实表名和列名
+3. 生成修正后的 SQL
+4. 这是第 {attempt} 次修正尝试（最多 {max_attempts} 次）
+
+## 输出格式（严格 JSON，不要包裹 markdown）：
+{{"action":"{action}","sql":"修正后的SQL","explanation":"修正说明：原因 + 改了什么","database":"{current_db}"}}
+"""
+
+
+def build_auto_fix_prompt(
+    failed_sql: str,
+    error_message: str,
+    action: str,
+    skill_context: str,
+    current_db: str,
+    db_type: str = "postgresql",
+    attempt: int = 1,
+    max_attempts: int = 3,
+) -> str:
+    """
+    构建自动修复提示词
+
+    Args:
+        failed_sql: 执行失败的 SQL
+        error_message: 数据库返回的错误信息
+        action: 原始 action 类型
+        skill_context: skill.md 的内容
+        current_db: 当前数据库名
+        db_type: 数据库类型
+        attempt: 当前重试次数
+        max_attempts: 最大重试次数
+
+    Returns:
+        自动修复提示词
+    """
+    db_type_display = {
+        "postgresql": "PostgreSQL",
+        "mysql": "MySQL",
+        "oracle": "Oracle",
+        "sqlite": "SQLite",
+        "duckdb": "DuckDB",
+    }.get(db_type, "PostgreSQL")
+
+    return AUTO_FIX_PROMPT.format(
+        db_type_display=db_type_display,
+        failed_sql=failed_sql,
+        error_message=error_message,
+        action=action,
+        skill_context=skill_context,
+        current_db=current_db,
+        attempt=attempt,
+        max_attempts=max_attempts,
+    )
+

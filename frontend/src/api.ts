@@ -236,3 +236,26 @@ export async function previewTable(db: string, table: string): Promise<{ databas
   if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
   return res.json();
 }
+
+// Dictionary APIs
+export async function listDictionary(): Promise<{ entries: any[] }> {
+  return request<{ entries: any[] }>('/dictionary');
+}
+
+export async function addDictionary(data: { term: string; definition: string; sql_hint?: string; field_mappings?: Record<string, string> }): Promise<{ success: boolean; entry: any }> {
+  return request<{ success: boolean; entry: any }>('/dictionary', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateDictionary(id: string, data: { term?: string; definition?: string; sql_hint?: string; field_mappings?: Record<string, string> }): Promise<{ success: boolean; entry: any }> {
+  return request<{ success: boolean; entry: any }>(`/dictionary/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDictionary(id: string): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(`/dictionary/${id}`, { method: 'DELETE' });
+}

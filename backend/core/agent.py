@@ -9,7 +9,8 @@ from typing import Optional, Callable
 from backend.llm.llm_client import LLMClient
 from backend.db.db_client import DBClient
 from backend.services.skill_manager import SkillManager, DEFAULT_SKILL_CONTENT
-from backend.llm.prompts import build_system_prompt
+from backend.services.data_dictionary import DataDictionary
+from backend.llm.prompts import build_system_prompt, build_auto_fix_prompt
 from backend.core.exceptions import SQLAgentError
 from backend.core.logging_config import get_logger
 
@@ -19,6 +20,9 @@ logger = get_logger(__name__)
 DDL_ACTIONS = {"create_db", "drop_db", "create_table", "drop_table", "alter_table"}
 # DDL 中特别危险的操作
 DANGEROUS_ACTIONS = {"drop_db", "drop_table"}
+
+# Auto-Fix 最大重试次数
+MAX_AUTO_FIX_RETRIES = 3
 
 # PostgreSQL / MySQL 系统数据库（扫描时排除）
 SYSTEM_DATABASES = {
@@ -42,6 +46,7 @@ class SQLAgent:
         db_port: int = 0,
         db_user: str = "",
         db_password: str = "",
+        db_file_path: str = "",
     ):
         """
         初始化 SQL Agent
@@ -52,11 +57,12 @@ class SQLAgent:
             api_base_url: API 地址
             api_key: API Key
             api_model: API 模型名称
-            db_type: 数据库类型 postgresql/mysql/oracle
+            db_type: 数据库类型 postgresql/mysql/oracle/sqlite/duckdb
             db_host: 数据库主机
             db_port: 端口号
             db_user: 用户名
             db_password: 密码
+            db_file_path: 数据库文件路径 (SQLite/DuckDB)
         """
         self.db_type = db_type
 
@@ -81,9 +87,11 @@ class SQLAgent:
             port=db_port,
             user=db_user,
             password=db_password,
+            db_file_path=db_file_path,
         )
 
         self.skill = SkillManager()
+        self.dictionary = DataDictionary()
 
     def get_current_db(self) -> str:
         """获取当前连接的数据库名"""
@@ -195,10 +203,11 @@ class SQLAgent:
         }
 
         try:
-            # 1. 构建系统提示词，注入当前数据库状态
-            skill_context = self.skill.get_summary()
+            # 1. 构建系统提示词，注入当前数据库状态和业务字典
+            skill_context = self.skill.get_relevant_summary(user_input, max_tables=15)
+            business_rules = self.dictionary.get_context_for_prompt()
             system_prompt = build_system_prompt(
-                skill_context, self.db.current_db, self.db_type, language
+                skill_context, self.db.current_db, self.db_type, language, business_rules
             )
 
             # 2. 调用 LLM
@@ -272,8 +281,24 @@ class SQLAgent:
                     result["result"] = "操作已取消"
                     return result
 
-            # 3. 执行 SQL
-            exec_result = self._execute_sql(action, sql)
+            # 3. 执行 SQL（带自动修复）
+            try:
+                exec_result = self._execute_sql(action, sql)
+            except Exception as exec_err:
+                # 尝试自动修复
+                logger.warning("SQL 执行失败，尝试自动修复: %s", exec_err)
+                fix_result = self._auto_fix_loop(sql, str(exec_err), action)
+                if fix_result:
+                    exec_result = fix_result["result"]
+                    result["auto_fixed"] = True
+                    result["fix_attempts"] = fix_result["attempts"]
+                    result["original_sql"] = sql
+                    result["sql"] = fix_result["sql"]
+                    result["fix_explanation"] = fix_result["explanation"]
+                    sql = fix_result["sql"]  # 更新 sql 用于后续 skill 更新
+                else:
+                    raise
+
             result["result"] = exec_result
             result["success"] = True
 
@@ -301,6 +326,72 @@ class SQLAgent:
         """根据 action 类型执行 SQL"""
         method_name = self._ACTION_DISPATCH.get(action, "execute_query")
         return getattr(self.db, method_name)(sql)
+
+    def _auto_fix_loop(self, failed_sql: str, error_msg: str, action: str) -> Optional[dict]:
+        """
+        自动修复循环：将失败的 SQL 和错误信息反馈给 LLM，让它修正后重试
+
+        Args:
+            failed_sql: 执行失败的 SQL
+            error_msg: 数据库返回的错误信息
+            action: 操作类型
+
+        Returns:
+            修复成功返回 {"sql", "result", "attempts", "explanation"}，失败返回 None
+        """
+        current_sql = failed_sql
+        current_error = error_msg
+        skill_context = self.skill.get_summary()
+
+        for attempt in range(1, MAX_AUTO_FIX_RETRIES + 1):
+            logger.info("Auto-Fix 第 %d/%d 次尝试", attempt, MAX_AUTO_FIX_RETRIES)
+
+            try:
+                # 构建修复提示词
+                fix_prompt = build_auto_fix_prompt(
+                    failed_sql=current_sql,
+                    error_message=current_error,
+                    action=action,
+                    skill_context=skill_context,
+                    current_db=self.db.current_db,
+                    db_type=self.db_type,
+                    attempt=attempt,
+                    max_attempts=MAX_AUTO_FIX_RETRIES,
+                )
+
+                # 调用 LLM 获取修复后的 SQL
+                response = self.llm.chat(
+                    f"请修复这个 SQL 错误（第 {attempt} 次尝试）",
+                    fix_prompt,
+                )
+                parsed = self.llm.parse_json_response(response)
+                new_sql = parsed.get("sql", "").strip()
+                explanation = parsed.get("explanation", "")
+
+                if not new_sql or new_sql == current_sql:
+                    logger.warning("Auto-Fix: LLM 未能生成不同的 SQL，跳过")
+                    continue
+
+                logger.info("Auto-Fix: 尝试执行修复后的 SQL: %s", new_sql[:100])
+
+                # 尝试执行修复后的 SQL
+                exec_result = self._execute_sql(action, new_sql)
+
+                logger.info("Auto-Fix 成功！第 %d 次尝试", attempt)
+                return {
+                    "sql": new_sql,
+                    "result": exec_result,
+                    "attempts": attempt,
+                    "explanation": explanation,
+                }
+
+            except Exception as retry_err:
+                logger.warning("Auto-Fix 第 %d 次尝试仍然失败: %s", attempt, retry_err)
+                current_sql = new_sql if 'new_sql' in dir() else current_sql
+                current_error = str(retry_err)
+
+        logger.error("Auto-Fix: %d 次尝试后仍然失败", MAX_AUTO_FIX_RETRIES)
+        return None
 
     def _update_skill(self, action: str, sql: str, target_db: str) -> None:
         """根据操作类型更新 skill.md"""

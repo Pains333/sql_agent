@@ -4,7 +4,7 @@ import type { ConversationSummary, HealthStatus } from '../types';
 import type { Lang } from '../i18n';
 import { t, getLang } from '../i18n';
 import { healthCheck } from '../api';
-import { Plus, LogOut, MessageSquare, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, LogOut, MessageSquare, Settings, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
 import ContextMenu from './ContextMenu';
 import SettingsPanel from './SettingsPanel';
 import './Sidebar.css';
@@ -22,6 +22,7 @@ interface SidebarProps {
   onToggleTheme: () => void;
   lang: Lang;
   onLangChange: (lang: Lang) => void;
+  onOpenDictionary: () => void;
 }
 
 export default function Sidebar({
@@ -37,6 +38,7 @@ export default function Sidebar({
   onToggleTheme,
   lang,
   onLangChange,
+  onOpenDictionary,
 }: SidebarProps) {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -138,14 +140,26 @@ export default function Sidebar({
           </div>
         )}
         <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            className="collapse-btn"
-            onClick={() => setSettingsOpen(!settingsOpen)}
-            title={t('settings.title')}
-            style={{ flex: 'none', width: 32 }}
-          >
-            <Settings size={16} />
-          </button>
+          {!collapsed && (
+            <>
+              <button
+                className="collapse-btn"
+                onClick={onOpenDictionary}
+                title="业务字典"
+                style={{ flex: 'none', width: 32 }}
+              >
+                <BookOpen size={16} />
+              </button>
+              <button
+                className="collapse-btn"
+                onClick={() => setSettingsOpen(!settingsOpen)}
+                title={t('settings.title')}
+                style={{ flex: 'none', width: 32 }}
+              >
+                <Settings size={16} />
+              </button>
+            </>
+          )}
           <button className="collapse-btn" onClick={onToggleCollapse} title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')} style={{ flex: 1 }}>
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>

@@ -14,6 +14,7 @@ import {
 import SetupWizard from './components/SetupWizard';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
+import DictionaryPanel from './components/DictionaryPanel';
 import './App.css';
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -200,6 +202,7 @@ export default function App() {
         onToggleTheme={toggleTheme}
         lang={lang}
         onLangChange={handleLangChange}
+        onOpenDictionary={() => setIsDictionaryOpen(true)}
       />
       <ChatArea
         conversation={activeConv}
@@ -209,6 +212,7 @@ export default function App() {
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         lang={lang}
       />
+      {isDictionaryOpen && <DictionaryPanel onClose={() => setIsDictionaryOpen(false)} />}
     </div>
   );
 }

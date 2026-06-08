@@ -21,3 +21,6 @@ pyarrow            # Parquet
 # CLI (interactive mode)
 rich
 
+# Additional drivers and features
+duckdb             # DuckDB
+scikit-learn       # RAG feature

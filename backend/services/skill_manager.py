@@ -9,6 +9,7 @@ from datetime import datetime
 
 from backend.core import config
 from backend.core.logging_config import get_logger
+from backend.services.table_retriever import TableRetriever
 
 logger = get_logger(__name__)
 
@@ -136,8 +137,76 @@ class SkillManager:
         self.add_table(db_name, table_name, columns)
 
     def get_summary(self) -> str:
-        """获取 skill.md 的内容（用于 LLM 上下文）"""
+        """获取 skill.md 的完整内容（旧方法，为向后兼容保留）"""
         content = self.read()
         if content.strip() == DEFAULT_SKILL_CONTENT.strip():
             return "当前没有已记录的数据库和表信息。"
         return content
+
+    def get_relevant_summary(self, query: str, max_tables: int = 15) -> str:
+        """获取检索后相关的 skill.md 内容（用于 LLM 上下文）"""
+        content = self.read()
+        if content.strip() == DEFAULT_SKILL_CONTENT.strip():
+            return "当前没有已记录的数据库和表信息。"
+
+        if not query:
+            return content
+
+        # 解析 Markdown 结构
+        tables_info = []
+        current_db = ""
+        current_table = ""
+        current_schema = []
+
+        lines = content.split('\n')
+        for line in lines:
+            if line.startswith('## 数据库:'):
+                current_db = line.replace('## 数据库:', '').strip()
+            elif line.startswith('### 表:'):
+                if current_table and current_db:
+                    tables_info.append({
+                        "db": current_db,
+                        "table": current_table,
+                        "schema": "\n".join(current_schema),
+                    })
+                current_table = line.replace('### 表:', '').strip()
+                current_schema = []
+            elif current_table:
+                current_schema.append(line)
+        
+        # 最后一个表
+        if current_table and current_db:
+            tables_info.append({
+                "db": current_db,
+                "table": current_table,
+                "schema": "\n".join(current_schema),
+            })
+
+        # 如果表数量较少，直接返回完整内容
+        if len(tables_info) <= max_tables:
+            return content
+
+        # 否则使用检索器
+        retriever = TableRetriever(top_k=max_tables)
+        retriever.build_index(tables_info)
+        relevant_tables = retriever.retrieve(query)
+
+        # 重建摘要内容
+        summary_lines = ["# 数据库元信息 (检索结果)\n"]
+        summary_lines.append(f"> 找到了 {len(relevant_tables)} 个与 '{query}' 相关的表。\n")
+        
+        # 按数据库对表进行分组
+        db_tables = {}
+        for info in relevant_tables:
+            db_name = info["db"]
+            if db_name not in db_tables:
+                db_tables[db_name] = []
+            db_tables[db_name].append(info)
+            
+        for db_name, tables in db_tables.items():
+            summary_lines.append(f"\n## 数据库: {db_name}\n")
+            for table in tables:
+                summary_lines.append(f"\n### 表: {table['table']}\n")
+                summary_lines.append(table['schema'])
+                
+        return "\n".join(summary_lines)

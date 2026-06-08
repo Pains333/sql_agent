@@ -44,6 +44,8 @@ const texts = {
   'step3.userPlaceholder': { zh: '输入数据库用户名', en: 'Enter database username' },
   'step3.password': { zh: '数据库密码', en: 'Password' },
   'step3.passwordPlaceholder': { zh: '输入数据库密码', en: 'Enter database password' },
+  'step3.dbFilePath': { zh: '数据库文件路径', en: 'Database File Path' },
+  'step3.dbFilePathPlaceholder': { zh: '输入 .sqlite, .db, 或 .duckdb 文件路径', en: 'Enter path to .sqlite, .db, or .duckdb file' },
 
   // Chat
   'chat.title': { zh: '智能数据库助手', en: 'Smart Database Assistant' },

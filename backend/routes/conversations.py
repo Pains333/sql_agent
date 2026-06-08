@@ -59,13 +59,29 @@ def _build_ai_response(conv_id: str, result: dict):
     elif isinstance(res, str):
         result_text = res
 
+    # 构建自动修正元数据
+    plan = None
+    if result.get("auto_fixed"):
+        plan = {
+            "auto_fixed": True,
+            "fix_attempts": result.get("fix_attempts", 0),
+            "original_sql": result.get("original_sql", ""),
+            "fix_explanation": result.get("fix_explanation", ""),
+        }
+
+    explanation = result.get("explanation", "")
+    if result.get("auto_fixed"):
+        fix_note = f"\n\n🔧 **SQL 已自动修正**（第 {result.get('fix_attempts')} 次尝试成功）\n{result.get('fix_explanation', '')}"
+        explanation = (explanation or "") + fix_note
+
     return store.add_message(
         conv_id,
         role="assistant",
-        content=result.get("explanation", ""),
+        content=explanation,
         sql=result.get("sql", ""),
         action=result.get("action", ""),
         result=result_text,
+        plan=plan,
     )
 
 
@@ -354,9 +370,10 @@ def send_message_stream(conv_id: str, req: MessageRequest):
     def event_generator():
         try:
             # 流式思考阶段
-            skill_context = ag.skill.get_summary()
+            skill_context = ag.skill.get_relevant_summary(user_input, max_tables=15)
+            business_rules = ag.dictionary.get_context_for_prompt()
             system_prompt = build_system_prompt(
-                skill_context, ag.db.current_db, ag.db_type, language=req.language
+                skill_context, ag.db.current_db, ag.db_type, language=req.language, business_rules=business_rules
             )
 
             full_response = ""

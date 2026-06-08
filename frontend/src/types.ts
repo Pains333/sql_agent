@@ -48,11 +48,12 @@ export interface SetupConfig {
   api_base_url: string;
   api_key: string;
   api_model: string;
-  db_type: 'postgresql' | 'mysql' | 'oracle';
+  db_type: 'postgresql' | 'mysql' | 'oracle' | 'sqlite' | 'duckdb';
   db_host: string;
   db_port: number;
   db_user: string;
   db_password: string;
+  db_file_path?: string;
 }
 
 export interface OllamaModel {

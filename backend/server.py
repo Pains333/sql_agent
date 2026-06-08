@@ -10,6 +10,7 @@ from backend.routes.setup import router as setup_router
 from backend.routes.conversations import router as conversations_router
 from backend.routes.databases import router as databases_router
 from backend.routes.uploads import router as uploads_router
+from backend.routes.dictionary import router as dictionary_router
 
 logger = get_logger(__name__)
 
@@ -46,6 +47,7 @@ app.include_router(setup_router)
 app.include_router(conversations_router)
 app.include_router(databases_router)
 app.include_router(uploads_router)
+app.include_router(dictionary_router)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,8 @@ DB_DEFAULT_PORTS: dict[str, int] = {
     "postgresql": 5432,
     "mysql": 3306,
     "oracle": 1521,
+    "sqlite": 0,
+    "duckdb": 0,
 }
 
 
@@ -34,4 +36,6 @@ DB_DEFAULT_NAMES: dict[str, str] = {
     "postgresql": "postgres",
     "mysql": "mysql",
     "oracle": "ORCL",
+    "sqlite": "main",
+    "duckdb": "main",
 }

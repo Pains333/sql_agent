@@ -85,6 +85,7 @@ def init_agent_from_config(cfg: dict) -> bool:
             db_port=cfg.get("db_port", 5432),
             db_user=cfg.get("db_user", ""),
             db_password=cfg.get("db_password", ""),
+            db_file_path=cfg.get("db_file_path", ""),
         )
         _ = agent.db.conn
         setup_done = True

@@ -14,6 +14,7 @@ class SetupRequest(BaseModel):
     db_port: int = 5432
     db_user: str = ""
     db_password: str = ""
+    db_file_path: str = ""
 
 
 class MessageRequest(BaseModel):

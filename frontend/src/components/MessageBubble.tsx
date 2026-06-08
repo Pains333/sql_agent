@@ -95,6 +95,23 @@ export default function MessageBubble({ message, onExecute, onCancel }: MessageB
           </div>
         )}
 
+        {/* Auto-Fix 修正提示 */}
+        {message.plan?.auto_fixed && (
+          <div className="auto-fix-banner">
+            <span className="auto-fix-icon">🔧</span>
+            <div className="auto-fix-info">
+              <strong>SQL 已自动修正</strong>
+              <span className="auto-fix-attempts">（第 {message.plan.fix_attempts} 次尝试成功）</span>
+              {message.plan.original_sql && (
+                <details className="auto-fix-details">
+                  <summary>查看原始 SQL</summary>
+                  <pre className="auto-fix-original-sql">{message.plan.original_sql}</pre>
+                </details>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* SQL block — editable when pending, readonly otherwise */}
         {message.sql && (
           <div className="sql-block">

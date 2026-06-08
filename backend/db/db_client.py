@@ -23,12 +23,14 @@ class DBClient:
         user: str = "",
         password: str = "",
         database: str = "",
+        db_file_path: str = "",
     ):
         self.db_type = db_type.lower()
         self.host = host or config.PG_HOST
         self.port = port or config.DB_DEFAULT_PORTS.get(self.db_type, 5432)
         self.user = user
         self.password = password
+        self.db_file_path = db_file_path  # SQLite / DuckDB 文件路径
         self.current_db = database or config.DB_DEFAULT_NAMES.get(self.db_type, "postgres")
         self._conn = None
 
@@ -46,6 +48,10 @@ class DBClient:
         try:
             if self.db_type == "postgresql":
                 return self._conn.closed != 0
+            elif self.db_type in ("sqlite", "duckdb"):
+                # SQLite/DuckDB: 尝试执行简单查询检查连接
+                self._conn.execute("SELECT 1")
+                return False
             # MySQL / Oracle 都可以用 ping 检查
             self._conn.ping(reconnect=False) if self.db_type == "mysql" else self._conn.ping()
             return False
@@ -81,6 +87,19 @@ class DBClient:
                     user=self.user, password=self.password, dsn=dsn,
                 )
                 self._conn.autocommit = True
+
+            elif self.db_type == "sqlite":
+                import sqlite3
+                if not self.db_file_path:
+                    raise ValueError("SQLite 需要指定数据库文件路径")
+                self._conn = sqlite3.connect(self.db_file_path)
+                self._conn.execute("PRAGMA foreign_keys = ON")
+
+            elif self.db_type == "duckdb":
+                import duckdb
+                if not self.db_file_path:
+                    raise ValueError("DuckDB 需要指定数据库文件路径")
+                self._conn = duckdb.connect(self.db_file_path)
 
             else:
                 raise ValueError(f"不支持的数据库类型: {self.db_type}")
@@ -196,6 +215,11 @@ class DBClient:
             "mysql": "SHOW DATABASES;",
             "oracle": "SELECT username FROM all_users ORDER BY username",
         }
+        if self.db_type == "sqlite":
+            return ["main"]
+        if self.db_type == "duckdb":
+            _, rows = self.execute_query("PRAGMA database_list")
+            return [row[1] for row in rows] if rows else ["main"]
         sql = queries.get(self.db_type)
         if not sql:
             return []
@@ -205,6 +229,15 @@ class DBClient:
     def list_tables(self, database: str = None) -> list:
         """列出指定数据库中的所有用户表"""
         self._ensure_database(database)
+
+        if self.db_type == "sqlite":
+            _, rows = self.execute_query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            )
+            return [row[0] for row in rows]
+        if self.db_type == "duckdb":
+            _, rows = self.execute_query("SHOW TABLES")
+            return [row[0] for row in rows]
 
         queries = {
             "postgresql": "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;",
@@ -226,6 +259,10 @@ class DBClient:
             return self._describe_table_mysql(table_name)
         elif self.db_type == "oracle":
             return self._describe_table_oracle(table_name)
+        elif self.db_type == "sqlite":
+            return self._describe_table_sqlite(table_name)
+        elif self.db_type == "duckdb":
+            return self._describe_table_duckdb(table_name)
         return []
 
     def get_foreign_keys(self, database: str = None) -> list:
@@ -416,6 +453,73 @@ class DBClient:
                 (database,)
             )
             encoding = rows[0][0] if rows else "utf8mb4"
+        elif self.db_type in ("sqlite", "duckdb"):
+            encoding = "UTF-8"
         else:
             encoding = "UNKNOWN"
         return {"name": database, "encoding": encoding}
+
+    # --- SQLite 表结构查询 ---
+
+    def _describe_table_sqlite(self, table_name: str) -> list:
+        """获取 SQLite 表的列信息"""
+        columns_info = self._fetchall(f"PRAGMA table_info('{table_name}')")
+        # PRAGMA table_info returns: (cid, name, type, notnull, dflt_value, pk)
+
+        # 获取外键信息
+        fk_rows = self._fetchall(f"PRAGMA foreign_key_list('{table_name}')")
+        fk_map = {}
+        for fk in fk_rows:
+            # (id, seq, table, from, to, on_update, on_delete, match)
+            fk_map[fk[3]] = f"REFERENCES {fk[2]}({fk[4]})"
+
+        result = []
+        for col in columns_info:
+            cid, col_name, col_type, notnull, default, is_pk = col[:6]
+            constraints = []
+            if is_pk:
+                constraints.append("PRIMARY KEY")
+            if notnull and not is_pk:
+                constraints.append("NOT NULL")
+            if default is not None:
+                constraints.append(f"DEFAULT {default}")
+            if col_name in fk_map:
+                constraints.append(fk_map[col_name])
+            result.append((col_name, col_type.upper() if col_type else "TEXT", ", ".join(constraints) if constraints else ""))
+        return result
+
+    # --- DuckDB 表结构查询 ---
+
+    def _describe_table_duckdb(self, table_name: str) -> list:
+        """获取 DuckDB 表的列信息"""
+        columns_info = self._fetchall(f"""
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_name = '{table_name}'
+            ORDER BY ordinal_position
+        """)
+
+        # 获取主键信息
+        pk_columns = set()
+        try:
+            pk_rows = self._fetchall(f"""
+                SELECT column_name
+                FROM information_schema.key_column_usage
+                WHERE table_name = '{table_name}'
+            """)
+            pk_columns = {row[0] for row in pk_rows}
+        except Exception:
+            pass
+
+        result = []
+        for col in columns_info:
+            col_name, col_type, is_nullable, default = col[:4]
+            constraints = []
+            if col_name in pk_columns:
+                constraints.append("PRIMARY KEY")
+            if is_nullable == "NO" and col_name not in pk_columns:
+                constraints.append("NOT NULL")
+            if default:
+                constraints.append(f"DEFAULT {default}")
+            result.append((col_name, col_type.upper(), ", ".join(constraints) if constraints else ""))
+        return result
