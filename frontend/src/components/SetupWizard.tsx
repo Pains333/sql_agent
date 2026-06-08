@@ -286,7 +286,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                     type="text"
                     value={dbFilePath}
                     onChange={(e) => setDbFilePath(e.target.value)}
-                    placeholder={dbType === 'sqlite' ? '输入 .sqlite 或 .db 文件路径' : '输入 .duckdb 或 .db 文件路径'}
+                    placeholder={dbType === 'sqlite' ? t('step3.sqlitePlaceholder' as any) : t('step3.duckdbPlaceholder' as any)}
                   />
                 </div>
               ) : (

@@ -46,6 +46,8 @@ const texts = {
   'step3.passwordPlaceholder': { zh: '输入数据库密码', en: 'Enter database password' },
   'step3.dbFilePath': { zh: '数据库文件路径', en: 'Database File Path' },
   'step3.dbFilePathPlaceholder': { zh: '输入 .sqlite, .db, 或 .duckdb 文件路径', en: 'Enter path to .sqlite, .db, or .duckdb file' },
+  'step3.sqlitePlaceholder': { zh: '输入 .sqlite 或 .db 文件路径', en: 'Enter path to .sqlite or .db file' },
+  'step3.duckdbPlaceholder': { zh: '输入 .duckdb 或 .db 文件路径', en: 'Enter path to .duckdb or .db file' },
 
   // Chat
   'chat.title': { zh: '智能数据库助手', en: 'Smart Database Assistant' },
@@ -63,6 +65,12 @@ const texts = {
   'chat.removeAttachment': { zh: '移除附件', en: 'Remove attachment' },
   'chat.columns': { zh: '列', en: 'cols' },
   'chat.rows': { zh: '行', en: 'rows' },
+  'chat.result': { zh: '执行结果', en: 'Result' },
+  'chat.autoFixed': { zh: 'SQL 已自动修正', en: 'SQL Auto-Fixed' },
+  'chat.autoFixAttempts': { zh: '（第 {n} 次尝试成功）', en: '(Fixed after {n} attempts)' },
+  'chat.viewOriginalSql': { zh: '查看原始 SQL', en: 'View Original SQL' },
+  'chat.explainPerformance': { zh: '分析性能', en: 'Analyze Perf' },
+  'chat.explainPlan': { zh: '执行计划分析', en: 'Execution Plan Analysis' },
 
   // Sidebar
   'sidebar.newChat': { zh: '新建对话', en: 'New Chat' },
@@ -117,6 +125,9 @@ const texts = {
   'cmd.databases': { zh: '查看所有数据库', en: 'Show all databases' },
   'cmd.describe': { zh: '查看表结构', en: 'Describe table structure' },
   'cmd.clear': { zh: '清空当前对话', en: 'Clear current conversation' },
+  'cmd.tablesMsg': { zh: '显示当前数据库的所有表', en: 'Show all tables in current database' },
+  'cmd.databasesMsg': { zh: '显示所有数据库', en: 'Show all databases' },
+  'cmd.describeMsg': { zh: '查看表结构', en: 'Describe table structure' },
 
   // Pagination
   'pagination.prev': { zh: '上一页', en: 'Previous' },
@@ -157,6 +168,30 @@ const texts = {
   'error.apiUrlRequired': { zh: '请输入 API 地址', en: 'API Base URL is required' },
   'error.apiKeyRequired': { zh: '请输入 API Key', en: 'API Key is required' },
   'error.apiModelRequired': { zh: '请输入模型名称', en: 'Model name is required' },
+
+  // Dictionary
+  'dict.title': { zh: '业务字典 & 知识库', en: 'Business Dictionary & Knowledge Base' },
+  'dict.search': { zh: '搜索术语...', en: 'Search terms...' },
+  'dict.add': { zh: '新增规则', en: 'Add Rule' },
+  'dict.loading': { zh: '加载中...', en: 'Loading...' },
+  'dict.empty': { zh: '暂无业务规则', en: 'No business rules' },
+  'dict.sqlHint': { zh: 'SQL示例:', en: 'SQL Hint:' },
+  'dict.mapping': { zh: '映射:', en: 'Mapping:' },
+  'dict.addTitle': { zh: '新增业务规则', en: 'Add Business Rule' },
+  'dict.editTitle': { zh: '编辑业务规则', en: 'Edit Business Rule' },
+  'dict.termLabel': { zh: '业务术语 (必填)', en: 'Business Term (Required)' },
+  'dict.termPlaceholder': { zh: '如: DAU, 活跃用户', en: 'e.g., DAU, Active Users' },
+  'dict.defLabel': { zh: '定义说明 (必填)', en: 'Definition (Required)' },
+  'dict.defPlaceholder': { zh: '详细解释该术语的计算逻辑或含义...', en: 'Detailed explanation of the calculation logic or meaning...' },
+  'dict.sqlLabel': { zh: 'SQL 示例 / 提示 (选填)', en: 'SQL Example / Hint (Optional)' },
+  'dict.sqlPlaceholder': { zh: '如: SELECT COUNT(DISTINCT user_id)...', en: 'e.g., SELECT COUNT(DISTINCT user_id)...' },
+  'dict.mapLabel': { zh: '字段枚举映射 (选填, 每行一个 key=value)', en: 'Field Mapping (Optional, one key=value per line)' },
+  'dict.mapPlaceholder': { zh: 'status=1=有效\\nstatus=0=无效', en: 'status=1=Active\\nstatus=0=Inactive' },
+  'dict.save': { zh: '保存', en: 'Save' },
+  'dict.cancel': { zh: '取消', en: 'Cancel' },
+  'dict.deleteConfirm': { zh: '确认删除该业务规则？', en: 'Are you sure you want to delete this business rule?' },
+  'dict.saveFailed': { zh: '保存失败: ', en: 'Save failed: ' },
+  'dict.deleteFailed': { zh: '删除失败: ', en: 'Delete failed: ' },
 } as const;
 
 type TextKey = keyof typeof texts;

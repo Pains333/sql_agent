@@ -19,9 +19,9 @@ interface ChatAreaProps {
 const ACCEPTED_FORMATS = '.xlsx,.xls,.csv,.pkl,.parquet,.json';
 
 const COMMANDS = [
-  { name: '/tables', desc: 'cmd.tables' as const, message: '显示当前数据库的所有表' },
-  { name: '/databases', desc: 'cmd.databases' as const, message: '显示所有数据库' },
-  { name: '/describe', desc: 'cmd.describe' as const, message: '查看表结构' },
+  { name: '/tables', desc: 'cmd.tables' as const, message: t('cmd.tablesMsg' as any) },
+  { name: '/databases', desc: 'cmd.databases' as const, message: t('cmd.databasesMsg' as any) },
+  { name: '/describe', desc: 'cmd.describe' as const, message: t('cmd.describeMsg' as any) },
 ];
 
 export default function ChatArea({ conversation, onMessageSent, onAutoCreate, sidebarCollapsed, onToggleSidebar, lang = 'zh' }: ChatAreaProps) {

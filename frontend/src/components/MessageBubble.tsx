@@ -100,11 +100,11 @@ export default function MessageBubble({ message, onExecute, onCancel }: MessageB
           <div className="auto-fix-banner">
             <span className="auto-fix-icon">🔧</span>
             <div className="auto-fix-info">
-              <strong>SQL 已自动修正</strong>
-              <span className="auto-fix-attempts">（第 {message.plan.fix_attempts} 次尝试成功）</span>
+              <strong>{t('chat.autoFixed' as any)}</strong>
+              <span className="auto-fix-attempts">{t('chat.autoFixAttempts' as any).replace('{n}', String(message.plan.fix_attempts))}</span>
               {message.plan.original_sql && (
                 <details className="auto-fix-details">
-                  <summary>查看原始 SQL</summary>
+                  <summary>{t('chat.viewOriginalSql' as any)}</summary>
                   <pre className="auto-fix-original-sql">{message.plan.original_sql}</pre>
                 </details>
               )}
@@ -167,7 +167,7 @@ export default function MessageBubble({ message, onExecute, onCancel }: MessageB
                       disabled={explaining}
                     >
                       <Search size={14} />
-                      {explaining ? '...' : '分析性能'}
+                      {explaining ? '...' : t('chat.explainPerformance' as any)}
                     </button>
                   )}
                 </div>
@@ -175,7 +175,7 @@ export default function MessageBubble({ message, onExecute, onCancel }: MessageB
                 {(explainData || explainError) && (
                   <div className="sql-explain-block">
                     <div className="sql-explain-header">
-                      <span>执行计划分析</span>
+                      <span>{t('chat.explainPlan' as any)}</span>
                       <button onClick={() => { setExplainData(null); setExplainError(null); }} className="sql-explain-close">
                         <XCircle size={14} />
                       </button>
@@ -222,7 +222,7 @@ export default function MessageBubble({ message, onExecute, onCancel }: MessageB
         {message.result && (
           <div className="result-block">
             <div className="result-header">
-              <span>{t('schema.title') === '数据库结构' ? '执行结果' : 'Result'}</span>
+              <span>{t('chat.result' as any)}</span>
               <div className="result-header-actions">
                 {message.result!.includes('|') && (
                   <button className="export-btn" onClick={() => exportCSV(message.result!)}>

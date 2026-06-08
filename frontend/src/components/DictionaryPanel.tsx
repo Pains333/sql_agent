@@ -84,18 +84,18 @@ export default function DictionaryPanel({ onClose }: DictionaryPanelProps) {
       loadEntries();
     } catch (e) {
       console.error(e);
-      alert('保存失败: ' + e);
+      alert(t('dict.saveFailed' as any) + e);
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('确认删除该业务规则？')) return;
+    if (!confirm(t('dict.deleteConfirm' as any))) return;
     try {
       await deleteDictionary(id);
       loadEntries();
     } catch (e) {
       console.error(e);
-      alert('删除失败: ' + e);
+      alert(t('dict.deleteFailed' as any) + e);
     }
   }
 
@@ -109,7 +109,7 @@ export default function DictionaryPanel({ onClose }: DictionaryPanelProps) {
       <div className="dict-header">
         <div className="dict-title">
           <BookOpen size={20} />
-          <h2>业务字典 & 知识库</h2>
+          <h2>{t('dict.title' as any)}</h2>
         </div>
         <button className="dict-close" onClick={onClose}>
           <X size={20} />
@@ -121,21 +121,21 @@ export default function DictionaryPanel({ onClose }: DictionaryPanelProps) {
           <Search size={16} />
           <input 
             type="text" 
-            placeholder="搜索术语..." 
+            placeholder={t('dict.search' as any)} 
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
         <button className="dict-add-btn" onClick={handleAdd}>
-          <Plus size={16} /> 新增规则
+          <Plus size={16} /> {t('dict.add' as any)}
         </button>
       </div>
 
       <div className="dict-content">
         {loading ? (
-          <div className="dict-loading">加载中...</div>
+          <div className="dict-loading">{t('dict.loading' as any)}</div>
         ) : filtered.length === 0 ? (
-          <div className="dict-empty">暂无业务规则</div>
+          <div className="dict-empty">{t('dict.empty' as any)}</div>
         ) : (
           <div className="dict-list">
             {filtered.map(entry => (
@@ -151,13 +151,13 @@ export default function DictionaryPanel({ onClose }: DictionaryPanelProps) {
                   <p className="dict-def">{entry.definition}</p>
                   {entry.sql_hint && (
                     <div className="dict-sql">
-                      <span className="dict-label">SQL示例:</span>
+                      <span className="dict-label">{t('dict.sqlHint' as any)}</span>
                       <code>{entry.sql_hint}</code>
                     </div>
                   )}
                   {entry.field_mappings && Object.keys(entry.field_mappings).length > 0 && (
                     <div className="dict-mappings">
-                      <span className="dict-label">映射:</span>
+                      <span className="dict-label">{t('dict.mapping' as any)}</span>
                       <div className="mapping-tags">
                         {Object.entries(entry.field_mappings).map(([k, v]) => (
                           <span key={k} className="mapping-tag">{k} → {v as string}</span>
@@ -175,29 +175,29 @@ export default function DictionaryPanel({ onClose }: DictionaryPanelProps) {
       {editingId && (
         <div className="dict-modal-overlay">
           <div className="dict-modal">
-            <h3>{editingId === 'new' ? '新增业务规则' : '编辑业务规则'}</h3>
+            <h3>{editingId === 'new' ? t('dict.addTitle' as any) : t('dict.editTitle' as any)}</h3>
             <div className="dict-form">
               <div className="form-group">
-                <label>业务术语 (必填)</label>
-                <input type="text" value={term} onChange={e => setTerm(e.target.value)} placeholder="如: DAU, 活跃用户" />
+                <label>{t('dict.termLabel' as any)}</label>
+                <input type="text" value={term} onChange={e => setTerm(e.target.value)} placeholder={t('dict.termPlaceholder' as any)} />
               </div>
               <div className="form-group">
-                <label>定义说明 (必填)</label>
-                <textarea value={definition} onChange={e => setDefinition(e.target.value)} placeholder="详细解释该术语的计算逻辑或含义..." rows={3} />
+                <label>{t('dict.defLabel' as any)}</label>
+                <textarea value={definition} onChange={e => setDefinition(e.target.value)} placeholder={t('dict.defPlaceholder' as any)} rows={3} />
               </div>
               <div className="form-group">
-                <label>SQL 示例 / 提示 (选填)</label>
-                <textarea value={sqlHint} onChange={e => setSqlHint(e.target.value)} placeholder="如: SELECT COUNT(DISTINCT user_id)..." rows={2} />
+                <label>{t('dict.sqlLabel' as any)}</label>
+                <textarea value={sqlHint} onChange={e => setSqlHint(e.target.value)} placeholder={t('dict.sqlPlaceholder' as any)} rows={2} />
               </div>
               <div className="form-group">
-                <label>字段枚举映射 (选填, 每行一个 key=value)</label>
-                <textarea value={fieldMappings} onChange={e => setFieldMappings(e.target.value)} placeholder="status=1=有效\nstatus=0=无效" rows={3} />
+                <label>{t('dict.mapLabel' as any)}</label>
+                <textarea value={fieldMappings} onChange={e => setFieldMappings(e.target.value)} placeholder={t('dict.mapPlaceholder' as any).replace(/\\n/g, '\n')} rows={3} />
               </div>
             </div>
             <div className="dict-modal-footer">
-              <button className="dict-btn-cancel" onClick={() => setEditingId(null)}>取消</button>
+              <button className="dict-btn-cancel" onClick={() => setEditingId(null)}>{t('dict.cancel' as any)}</button>
               <button className="dict-btn-save" onClick={handleSave} disabled={!term || !definition}>
-                <Save size={16} /> 保存
+                <Save size={16} /> {t('dict.save' as any)}
               </button>
             </div>
           </div>

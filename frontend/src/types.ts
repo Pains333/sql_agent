@@ -17,6 +17,10 @@ export interface Message {
     upload_id?: string;
     target_table?: string;
     filename?: string;
+    auto_fixed?: boolean;
+    fix_attempts?: number;
+    original_sql?: string;
+    fix_explanation?: string;
   };
 }
 

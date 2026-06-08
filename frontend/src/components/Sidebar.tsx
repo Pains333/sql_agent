@@ -145,7 +145,7 @@ export default function Sidebar({
               <button
                 className="collapse-btn"
                 onClick={onOpenDictionary}
-                title="业务字典"
+                title={t('dict.title' as any)}
                 style={{ flex: 'none', width: 32 }}
               >
                 <BookOpen size={16} />
