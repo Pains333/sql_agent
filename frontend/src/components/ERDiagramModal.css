@@ -129,11 +129,10 @@
 }
 
 .er-canvas {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+  display: inline-block;
   min-width: min-content;
   min-height: min-content;
+  transform-origin: 0 0;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 

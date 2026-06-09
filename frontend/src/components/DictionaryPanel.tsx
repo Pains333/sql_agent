@@ -5,10 +5,11 @@ import { X, Plus, Edit2, Trash2, Search, BookOpen, Save } from 'lucide-react';
 import './DictionaryPanel.css';
 
 interface DictionaryPanelProps {
+  isOpen: boolean;
   onClose: () => void;
 }
 
-export default function DictionaryPanel({ onClose }: DictionaryPanelProps) {
+export default function DictionaryPanel({ isOpen, onClose }: DictionaryPanelProps) {
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -105,7 +106,7 @@ export default function DictionaryPanel({ onClose }: DictionaryPanelProps) {
   );
 
   return (
-    <div className="dictionary-panel">
+    <div className={`dictionary-panel ${isOpen ? 'open' : ''}`}>
       <div className="dict-header">
         <div className="dict-title">
           <BookOpen size={20} />

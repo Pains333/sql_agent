@@ -372,8 +372,9 @@ def send_message_stream(conv_id: str, req: MessageRequest):
             # 流式思考阶段
             skill_context = ag.skill.get_relevant_summary(user_input, max_tables=15)
             business_rules = ag.dictionary.get_context_for_prompt()
+            lineage_context = ag.lineage.get_context_for_prompt()
             system_prompt = build_system_prompt(
-                skill_context, ag.db.current_db, ag.db_type, language=req.language, business_rules=business_rules
+                skill_context, ag.db.current_db, ag.db_type, language=req.language, business_rules=business_rules, lineage_context=lineage_context
             )
 
             full_response = ""

@@ -101,16 +101,29 @@
 }
 
 .copy-btn {
-  background: none;
-  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  opacity: 0.5;
-  transition: opacity 0.15s, transform 0.15s;
-  padding: 2px;
+  color: var(--sql-header-text);
+  opacity: 0.8;
+  transition: all 0.2s;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.copy-btn:hover { opacity: 1; transform: scale(1.15); }
+.copy-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+.copy-btn:active {
+  transform: translateY(0);
+}
 
 .sql-code {
   padding: 14px 16px;

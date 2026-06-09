@@ -65,6 +65,7 @@ create_db | drop_db | create_table | drop_table | alter_table | query | insert |
 {skill_context}
 
 {business_rules}
+{lineage_context}
 
 ## 当前数据库：{current_db}
 
@@ -72,7 +73,7 @@ create_db | drop_db | create_table | drop_table | alter_table | query | insert |
 """
 
 
-def build_system_prompt(skill_context: str, current_db: str, db_type: str = "postgresql", language: str = "zh", business_rules: str = "") -> str:
+def build_system_prompt(skill_context: str, current_db: str, db_type: str = "postgresql", language: str = "zh", business_rules: str = "", lineage_context: str = "") -> str:
     """
     构建完整的系统提示词
 
@@ -82,6 +83,7 @@ def build_system_prompt(skill_context: str, current_db: str, db_type: str = "pos
         db_type: 数据库类型
         language: 用户界面语言 (zh/en)
         business_rules: 业务规则字典
+        lineage_context: 数据血缘上下文
 
     Returns:
         完整的系统提示词
@@ -107,6 +109,7 @@ def build_system_prompt(skill_context: str, current_db: str, db_type: str = "pos
         db_specific_rules=db_specific_rules,
         skill_context=skill_context,
         business_rules=business_rules,
+        lineage_context=lineage_context,
         current_db=current_db,
         language_instruction=language_instruction,
     )

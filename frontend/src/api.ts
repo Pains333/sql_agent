@@ -259,3 +259,41 @@ export async function updateDictionary(id: string, data: { term?: string; defini
 export async function deleteDictionary(id: string): Promise<{ success: boolean }> {
   return request<{ success: boolean }>(`/dictionary/${id}`, { method: 'DELETE' });
 }
+
+// Lineage APIs
+import { LineageEntry } from './types';
+
+export async function listLineage(): Promise<LineageEntry[]> {
+  return request<LineageEntry[]>('/lineage');
+}
+
+export async function addLineage(data: { source_table: string; source_column: string; target_table: string; target_column: string; transform_logic: string }): Promise<{ success: boolean; data: LineageEntry }> {
+  return request<{ success: boolean; data: LineageEntry }>('/lineage', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateLineage(id: string, data: { source_table: string; source_column: string; target_table: string; target_column: string; transform_logic: string }): Promise<{ success: boolean; data: LineageEntry }> {
+  return request<{ success: boolean; data: LineageEntry }>(`/lineage/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteLineage(id: string): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(`/lineage/${id}`, { method: 'DELETE' });
+}
+
+export async function startParseSqlLineage(sql: string): Promise<{ task_id: string }> {
+  const res = await request<{ success: boolean; task_id: string }>('/lineage/parse', {
+    method: 'POST',
+    body: JSON.stringify({ sql }),
+  });
+  return res;
+}
+
+export async function getParseTaskStatus(taskId: string): Promise<{ status: string; data?: LineageEntry[]; error?: string }> {
+  const res = await request<{ success: boolean; task: { status: string; data?: LineageEntry[]; error?: string } }>(`/lineage/task/${taskId}`);
+  return res.task;
+}

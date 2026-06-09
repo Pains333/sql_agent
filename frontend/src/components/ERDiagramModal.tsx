@@ -11,11 +11,11 @@ mermaid.initialize({
   theme: 'base',
   themeVariables: {
     fontFamily: "'Inter', sans-serif",
-    primaryColor: '#f3f4f6',
-    primaryTextColor: '#1f2937',
-    primaryBorderColor: '#d1d5db',
-    lineColor: '#6366f1',
-    secondaryColor: '#e0e7ff',
+    primaryColor: '#f8fafc',
+    primaryTextColor: '#1e293b',
+    primaryBorderColor: '#cbd5e1',
+    lineColor: '#3b82f6',
+    secondaryColor: '#e2e8f0',
     tertiaryColor: '#ffffff'
   },
   er: {
@@ -64,15 +64,26 @@ export default function ERDiagramModal({ database, onClose }: ERDiagramModalProp
           md += `  ${rel.target_table} ||--o{ ${rel.source_table} : "REFERENCES"\n`;
         }
 
-        const { svg } = await mermaid.render('er-diagram-svg', md);
+        const id = `er-svg-${Math.random().toString(36).substr(2, 9)}`;
+        const { svg } = await mermaid.render(id, md);
         
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
-          // Clean up the max-width to allow zooming
+          // Force SVG to render at its native resolution to prevent squishing
           const svgEl = containerRef.current.querySelector('svg');
           if (svgEl) {
             svgEl.style.maxWidth = 'none';
-            svgEl.style.height = 'auto';
+            const viewBox = svgEl.getAttribute('viewBox');
+            if (viewBox) {
+              const [, , width, height] = viewBox.split(' ').map(Number);
+              if (width && height) {
+                svgEl.style.width = `${width}px`;
+                svgEl.style.height = `${height}px`;
+              }
+            } else {
+              svgEl.style.width = 'auto';
+              svgEl.style.height = 'auto';
+            }
           }
         }
       } catch (err: any) {
@@ -94,7 +105,7 @@ export default function ERDiagramModal({ database, onClose }: ERDiagramModalProp
       <div className="er-modal-container" onClick={e => e.stopPropagation()}>
         <div className="er-modal-header">
           <div className="er-modal-title">
-            <span>{database}</span> ER Diagram
+            <span>{database}</span> 数据库结构ER图
           </div>
           <div className="er-modal-controls">
             <button onClick={handleZoomOut} title="Zoom Out"><ZoomOut size={16} /></button>

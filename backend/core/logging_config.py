@@ -22,15 +22,16 @@ def setup_logging(level: str = "INFO") -> None:
 
     # 避免重复添加 handler
     if not root_logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(log_level)
-
         formatter = logging.Formatter(
             fmt="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
-        handler.setFormatter(formatter)
-        root_logger.addHandler(handler)
+
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(log_level)
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
+
 
     # 降低第三方库的日志级别
     logging.getLogger("uvicorn").setLevel(logging.WARNING)

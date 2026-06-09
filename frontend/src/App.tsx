@@ -15,6 +15,7 @@ import SetupWizard from './components/SetupWizard';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import DictionaryPanel from './components/DictionaryPanel';
+import LineagePanel from './components/LineagePanel';
 import './App.css';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
+  const [isLineageOpen, setIsLineageOpen] = useState(false);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -202,7 +204,8 @@ export default function App() {
         onToggleTheme={toggleTheme}
         lang={lang}
         onLangChange={handleLangChange}
-        onOpenDictionary={() => setIsDictionaryOpen(true)}
+        onOpenDictionary={() => setIsDictionaryOpen(prev => !prev)}
+        onOpenLineage={() => setIsLineageOpen(prev => !prev)}
       />
       <ChatArea
         conversation={activeConv}
@@ -212,7 +215,8 @@ export default function App() {
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         lang={lang}
       />
-      {isDictionaryOpen && <DictionaryPanel onClose={() => setIsDictionaryOpen(false)} />}
+      <DictionaryPanel isOpen={isDictionaryOpen} onClose={() => setIsDictionaryOpen(false)} />
+      <LineagePanel isOpen={isLineageOpen} onClose={() => setIsLineageOpen(false)} />
     </div>
   );
 }

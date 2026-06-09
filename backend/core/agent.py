@@ -10,6 +10,7 @@ from backend.llm.llm_client import LLMClient
 from backend.db.db_client import DBClient
 from backend.services.skill_manager import SkillManager, DEFAULT_SKILL_CONTENT
 from backend.services.data_dictionary import DataDictionary
+from backend.services.lineage_manager import LineageManager
 from backend.llm.prompts import build_system_prompt, build_auto_fix_prompt
 from backend.core.exceptions import SQLAgentError
 from backend.core.logging_config import get_logger
@@ -92,6 +93,7 @@ class SQLAgent:
 
         self.skill = SkillManager()
         self.dictionary = DataDictionary()
+        self.lineage = LineageManager()
 
     def get_current_db(self) -> str:
         """获取当前连接的数据库名"""
@@ -206,8 +208,9 @@ class SQLAgent:
             # 1. 构建系统提示词，注入当前数据库状态和业务字典
             skill_context = self.skill.get_relevant_summary(user_input, max_tables=15)
             business_rules = self.dictionary.get_context_for_prompt()
+            lineage_context = self.lineage.get_context_for_prompt()
             system_prompt = build_system_prompt(
-                skill_context, self.db.current_db, self.db_type, language, business_rules
+                skill_context, self.db.current_db, self.db_type, language, business_rules, lineage_context
             )
 
             # 2. 调用 LLM

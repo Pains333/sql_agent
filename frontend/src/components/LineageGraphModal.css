@@ -1,0 +1,110 @@
+.lineage-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  backdrop-filter: blur(4px);
+}
+
+.lineage-graph-modal-container {
+  width: 90vw;
+  height: 90vh;
+  background-color: var(--bg-surface);
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.lineage-graph-modal-header {
+  padding: 16px 24px;
+  background-color: var(--bg-surface-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lineage-graph-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.lineage-graph-modal-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lineage-graph-modal-controls button {
+  background: var(--bg-body);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.lineage-graph-modal-controls button:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.lineage-graph-modal-controls .close-btn {
+  margin-left: 12px;
+  background: transparent;
+  border-color: transparent;
+}
+
+.lineage-graph-modal-controls .close-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.lineage-graph-modal-body {
+  flex: 1;
+  overflow: auto;
+  background-color: var(--bg-body);
+  position: relative;
+  /* subtle grid background */
+  background-image: 
+    linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.lineage-graph-wrapper {
+  padding: 40px;
+  min-width: max-content;
+  min-height: max-content;
+  display: inline-block;
+  transform-origin: 0 0;
+  transition: transform 0.15s ease-out;
+}
+
+.lineage-mermaid-container {
+  background-color: var(--bg-surface);
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  display: inline-block;
+}
+
+.lineage-mermaid-container svg {
+  display: block;
+}

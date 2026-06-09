@@ -116,7 +116,7 @@ export default function SchemaDrawer({ currentDb, onClose }: SchemaDrawerProps) 
         <button 
           className="schema-er-btn"
           onClick={() => setErModalOpen(true)}
-          title="View ER Diagram"
+          title="查看数据库结构ER图"
         >
           <Network size={14} />
           ER

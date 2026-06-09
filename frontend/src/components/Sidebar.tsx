@@ -4,7 +4,7 @@ import type { ConversationSummary, HealthStatus } from '../types';
 import type { Lang } from '../i18n';
 import { t, getLang } from '../i18n';
 import { healthCheck } from '../api';
-import { Plus, LogOut, MessageSquare, Settings, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
+import { Plus, LogOut, MessageSquare, Settings, ChevronLeft, ChevronRight, BookOpen, Network } from 'lucide-react';
 import ContextMenu from './ContextMenu';
 import SettingsPanel from './SettingsPanel';
 import './Sidebar.css';
@@ -23,6 +23,7 @@ interface SidebarProps {
   lang: Lang;
   onLangChange: (lang: Lang) => void;
   onOpenDictionary: () => void;
+  onOpenLineage: () => void;
 }
 
 export default function Sidebar({
@@ -39,6 +40,7 @@ export default function Sidebar({
   lang,
   onLangChange,
   onOpenDictionary,
+  onOpenLineage,
 }: SidebarProps) {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -149,6 +151,14 @@ export default function Sidebar({
                 style={{ flex: 'none', width: 32 }}
               >
                 <BookOpen size={16} />
+              </button>
+              <button
+                className="collapse-btn"
+                onClick={onOpenLineage}
+                title={t('lineage.title' as any)}
+                style={{ flex: 'none', width: 32 }}
+              >
+                <Network size={16} />
               </button>
               <button
                 className="collapse-btn"

@@ -114,3 +114,14 @@ export interface ERDiagramData {
     target_column: string;
   }[];
 }
+
+export interface LineageEntry {
+  id: string;
+  source_table: string;
+  source_column: string;
+  target_table: string;
+  target_column: string;
+  transform_logic: string;
+  created_at?: string;
+  updated_at?: string;
+}

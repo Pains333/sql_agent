@@ -192,6 +192,26 @@ const texts = {
   'dict.deleteConfirm': { zh: '确认删除该业务规则？', en: 'Are you sure you want to delete this business rule?' },
   'dict.saveFailed': { zh: '保存失败: ', en: 'Save failed: ' },
   'dict.deleteFailed': { zh: '删除失败: ', en: 'Delete failed: ' },
+
+  // Lineage
+  'lineage.title': { zh: '数据血缘追踪', en: 'Data Lineage' },
+  'lineage.search': { zh: '搜索表名或列名...', en: 'Search tables or columns...' },
+  'lineage.add': { zh: '新增血缘', en: 'Add Lineage' },
+  'lineage.parse': { zh: '智能提取', en: 'Smart Parse' },
+  'lineage.loading': { zh: '加载中...', en: 'Loading...' },
+  'lineage.empty': { zh: '暂无数据血缘关系', en: 'No data lineage defined' },
+  'lineage.addTitle': { zh: '新增数据血缘', en: 'Add Data Lineage' },
+  'lineage.editTitle': { zh: '编辑数据血缘', en: 'Edit Data Lineage' },
+  'lineage.parseTitle': { zh: '从 SQL 提取血缘', en: 'Extract Lineage from SQL' },
+  'lineage.sourceTable': { zh: '源表 (必填)', en: 'Source Table (Required)' },
+  'lineage.sourceColumn': { zh: '源列 (必填)', en: 'Source Column (Required)' },
+  'lineage.targetTable': { zh: '目标表 (必填)', en: 'Target Table (Required)' },
+  'lineage.targetColumn': { zh: '目标列 (必填)', en: 'Target Column (Required)' },
+  'lineage.transformLogic': { zh: '转换逻辑 (选填)', en: 'Transform Logic (Optional)' },
+  'lineage.parseSqlPlaceholder': { zh: '在此粘贴建表语句、视图定义或 INSERT...SELECT 等复杂 SQL...', en: 'Paste CREATE TABLE AS, VIEW definition, or INSERT...SELECT here...' },
+  'lineage.parsing': { zh: '提取中...', en: 'Extracting...' },
+  'lineage.parseSuccess': { zh: '成功提取 {n} 条血缘关系，请保存确认。', en: 'Successfully extracted {n} lineage rules. Please save.' },
+  'lineage.parseFailed': { zh: '提取失败，请检查 SQL 是否完整。', en: 'Extraction failed. Please check your SQL.' },
 } as const;
 
 type TextKey = keyof typeof texts;
