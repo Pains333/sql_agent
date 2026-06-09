@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Network, X, Search, Plus, Save, Edit2, Trash2, ArrowRight, Zap } from 'lucide-react';
 import { listLineage, addLineage, updateLineage, deleteLineage, startParseSqlLineage, getParseTaskStatus } from '../api';
 import { LineageEntry } from '../types';
