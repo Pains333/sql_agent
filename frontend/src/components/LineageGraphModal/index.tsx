@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { X, ZoomIn, ZoomOut, Maximize, Network } from 'lucide-react';
-import { LineageEntry } from '../types';
-import { t } from '../i18n';
-import './LineageGraphModal.css';
+import { LineageEntry } from '../../types';
+import { t } from '../../i18n';
+import './index.css';
 
 interface LineageGraphModalProps {
   entries: LineageEntry[];

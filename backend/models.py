@@ -25,6 +25,7 @@ class MessageRequest(BaseModel):
 
 class ConversationCreate(BaseModel):
     title: Optional[str] = "新对话"
+    database: Optional[str] = None
 
 
 class TitleUpdate(BaseModel):

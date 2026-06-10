@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import './DataPreviewModal.css';
+import './index.css';
 
 interface DataPreviewModalProps {
   database: string;

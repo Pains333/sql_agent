@@ -1,13 +1,13 @@
 
 import { useState, useEffect } from 'react';
-import type { ConversationSummary, HealthStatus } from '../types';
-import type { Lang } from '../i18n';
-import { t, getLang } from '../i18n';
-import { healthCheck } from '../api';
+import type { ConversationSummary, HealthStatus } from '../../types';
+import type { Lang } from '../../i18n';
+import { t, getLang } from '../../i18n';
+import { healthCheck } from '../../api';
 import { Plus, LogOut, MessageSquare, Settings, ChevronLeft, ChevronRight, BookOpen, Network } from 'lucide-react';
-import ContextMenu from './ContextMenu';
-import SettingsPanel from './SettingsPanel';
-import './Sidebar.css';
+import ContextMenu from '../ContextMenu';
+import SettingsPanel from '../SettingsPanel';
+import './index.css';
 
 interface SidebarProps {
   conversations: ConversationSummary[];

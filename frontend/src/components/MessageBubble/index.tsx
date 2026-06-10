@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { Message } from '../types';
-import { paginateQuery, explainQuery } from '../api';
-import { t } from '../i18n';
+import type { Message } from '../../types';
+import { paginateQuery, explainQuery } from '../../api';
+import { t } from '../../i18n';
 import { User, Bot, AlertTriangle, Check, Copy, Download, XCircle, Search } from 'lucide-react';
-import './MessageBubble.css';
+import './index.css';
 
 interface MessageBubbleProps {
   message: Message;

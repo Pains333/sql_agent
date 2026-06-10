@@ -30,8 +30,7 @@ class LLMClient:
         self.mode = mode
         self.timeout = config.LLM_REQUEST_TIMEOUT
         self.temperature = config.LLM_TEMPERATURE
-        self.conversation_history: list[dict] = []
-
+        self.temperature = config.LLM_TEMPERATURE
         if mode == "local":
             self.base_url = base_url or config.OLLAMA_BASE_URL
             self.model = model or config.OLLAMA_MODEL
@@ -41,14 +40,12 @@ class LLMClient:
             self.model = model
             self.api_key = api_key
 
-    def reset_history(self) -> None:
-        """重置对话历史"""
-        self.conversation_history = []
 
-    def _build_messages(self, user_message: str, system_prompt: str) -> list[dict]:
+    def _build_messages(self, user_message: str, system_prompt: str, history: list[dict] = None) -> list[dict]:
         """构建包含系统提示、历史记录和用户消息的消息列表"""
         messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(self.conversation_history)
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": user_message})
         return messages
 
@@ -59,6 +56,7 @@ class LLMClient:
         Args:
             user_message: 用户消息
             system_prompt: 系统提示词
+            history: 对话历史列表
 
         Returns:
             模型回复的文本
@@ -68,7 +66,8 @@ class LLMClient:
             LLMTimeoutError: 请求超时
             LLMResponseError: 响应格式异常
         """
-        messages = self._build_messages(user_message, system_prompt)
+    def chat(self, user_message: str, system_prompt: str, history: list[dict] = None) -> str:
+        messages = self._build_messages(user_message, system_prompt, history)
 
         if self.mode == "local":
             url = f"{self.base_url}/api/chat"
@@ -101,7 +100,6 @@ class LLMClient:
             response.raise_for_status()
             result = response.json()
             assistant_message = extract(result)
-            self._save_history(user_message, assistant_message)
             return assistant_message
 
         except requests.exceptions.ConnectionError:
@@ -113,16 +111,15 @@ class LLMClient:
         except (KeyError, IndexError) as e:
             raise LLMResponseError(f"响应格式异常: {e}") from e
 
-    def chat_stream(self, user_message: str, system_prompt: str):
+    def chat_stream(self, user_message: str, system_prompt: str, history: list[dict] = None):
         """
         流式发送消息并逐 token 返回回复
 
         Yields:
             str: 每个 token 片段
 
-        最终通过 _save_history 保存完整对话。
         """
-        messages = self._build_messages(user_message, system_prompt)
+        messages = self._build_messages(user_message, system_prompt, history)
         full_response = ""
 
         try:
@@ -178,7 +175,6 @@ class LLMClient:
                             except json.JSONDecodeError:
                                 continue
 
-            self._save_history(user_message, full_response)
 
         except requests.exceptions.ConnectionError:
             raise LLMConnectionError(f"无法连接到服务")
@@ -186,17 +182,6 @@ class LLMClient:
             raise LLMTimeoutError(f"请求超时 ({self.timeout}s)")
         except requests.exceptions.HTTPError as e:
             raise LLMResponseError(f"API 错误: {e}") from e
-
-    def _save_history(self, user_message: str, assistant_message: str) -> None:
-        """保存对话历史"""
-        self.conversation_history.append(
-            {"role": "user", "content": user_message}
-        )
-        self.conversation_history.append(
-            {"role": "assistant", "content": assistant_message}
-        )
-        if len(self.conversation_history) > MAX_HISTORY_MESSAGES:
-            self.conversation_history = self.conversation_history[-HISTORY_TRIM_TO:]
 
     def parse_json_response(self, response_text: str) -> dict:
         """

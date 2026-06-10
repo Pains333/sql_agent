@@ -36,12 +36,15 @@ class DataDictionary:
             logger.error("保存业务字典失败: %s", e)
             raise
 
-    def list_entries(self) -> list[dict]:
-        return self.entries
+    def list_entries(self, db_name: str = None) -> list[dict]:
+        if not db_name:
+            return self.entries
+        return [e for e in self.entries if e.get("db_name") in (None, "", db_name)]
         
-    def add_entry(self, term: str, definition: str, sql_hint: str = "", field_mappings: dict = None) -> dict:
+    def add_entry(self, term: str, definition: str, sql_hint: str = "", field_mappings: dict = None, db_name: str = "") -> dict:
         entry = {
             "id": str(uuid.uuid4()),
+            "db_name": db_name,
             "term": term,
             "definition": definition,
             "sql_hint": sql_hint or "",
@@ -77,13 +80,14 @@ class DataDictionary:
             return True
         return False
         
-    def get_context_for_prompt(self) -> str:
+    def get_context_for_prompt(self, db_name: str = None) -> str:
         """生成供注入系统提示词的上下文"""
-        if not self.entries:
+        entries = self.list_entries(db_name)
+        if not entries:
             return ""
             
         lines = ["## 业务规则与数据字典 (Business Rules & Data Dictionary)"]
-        for e in self.entries:
+        for e in entries:
             lines.append(f"\n### {e['term']}")
             lines.append(f"- **定义**: {e['definition']}")
             if e.get('sql_hint'):

@@ -181,7 +181,7 @@ class SQLAgent:
             logger.error("数据库扫描失败: %s", e)
             return f"扫描失败: {e}"
 
-    def think(self, user_input: str, language: str = "zh") -> dict:
+    def think(self, user_input: str, language: str = "zh", history: list[dict] = None) -> dict:
         """
         第一阶段：调用 LLM 分析用户输入，生成执行计划
         此方法不涉及用户交互，可安全在 spinner 中运行
@@ -189,6 +189,7 @@ class SQLAgent:
         Args:
             user_input: 用户的自然语言输入
             language: 用户界面语言 (zh/en)
+            history: 对话历史记录
 
         Returns:
             思考结果字典（包含 action, sql, explanation 等）
@@ -207,14 +208,14 @@ class SQLAgent:
         try:
             # 1. 构建系统提示词，注入当前数据库状态和业务字典
             skill_context = self.skill.get_relevant_summary(user_input, max_tables=15)
-            business_rules = self.dictionary.get_context_for_prompt()
-            lineage_context = self.lineage.get_context_for_prompt()
+            business_rules = self.dictionary.get_context_for_prompt(self.db.current_db)
+            lineage_context = self.lineage.get_context_for_prompt(self.db.current_db)
             system_prompt = build_system_prompt(
                 skill_context, self.db.current_db, self.db_type, language, business_rules, lineage_context
             )
 
             # 2. 调用 LLM
-            response = self.llm.chat(user_input, system_prompt)
+            response = self.llm.chat(user_input, system_prompt, history=history)
 
             # 3. 解析 LLM 响应
             parsed = self.llm.parse_json_response(response)
@@ -366,6 +367,7 @@ class SQLAgent:
                 response = self.llm.chat(
                     f"请修复这个 SQL 错误（第 {attempt} 次尝试）",
                     fix_prompt,
+                    history=None,
                 )
                 parsed = self.llm.parse_json_response(response)
                 new_sql = parsed.get("sql", "").strip()
@@ -410,18 +412,30 @@ class SQLAgent:
                     self.skill.remove_database(db_name)
 
             elif action in ("create_table", "drop_table", "alter_table"):
-                table_name = self._extract_table_name(sql)
                 db_name = target_db or self.db.current_db
-                if not table_name:
-                    return
-                if action == "drop_table":
-                    self.skill.remove_table(db_name, table_name)
-                else:
-                    columns = self.db.describe_table(table_name, db_name)
-                    if action == "create_table":
-                        self.skill.add_table(db_name, table_name, columns)
-                    else:
-                        self.skill.update_table(db_name, table_name, columns)
+                
+                # 重新扫描整个数据库，确保不会遗漏多表删除或隐式创建
+                self.skill.remove_database(db_name)
+                db_info = self.db.get_database_info(db_name)
+                self.skill.add_database(db_name, db_info.get("encoding", "UTF8"))
+                
+                current_db_cache = self.db.current_db
+                try:
+                    if current_db_cache != db_name:
+                        self.db.connect_to_db(db_name)
+                    tables = self.db.list_tables()
+                    for table in tables:
+                        try:
+                            columns = self.db.describe_table(table)
+                            self.skill.add_table(db_name, table, columns)
+                        except Exception as e:
+                            logger.warning("扫描表 %s.%s 失败: %s", db_name, table, e)
+                finally:
+                    if current_db_cache != db_name:
+                        try:
+                            self.db.connect_to_db(current_db_cache)
+                        except Exception as e:
+                            logger.error("无法切回原始数据库 %s: %s", current_db_cache, e)
 
         except Exception as e:
             # skill.md 更新失败不应影响主流程，但记录日志

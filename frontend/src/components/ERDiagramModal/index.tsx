@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { X, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
-import { getErDiagram } from '../api';
+import { getErDiagram } from '../../api';
 
-import './ERDiagramModal.css';
+import './index.css';
 
 // Initialize mermaid
 mermaid.initialize({

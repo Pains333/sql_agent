@@ -143,7 +143,7 @@ class SkillManager:
             return "当前没有已记录的数据库和表信息。"
         return content
 
-    def get_relevant_summary(self, query: str, max_tables: int = 15) -> str:
+    def get_relevant_summary(self, query: str, max_tables: int = 15, current_db: str = "") -> str:
         """获取检索后相关的 skill.md 内容（用于 LLM 上下文）"""
         content = self.read()
         if content.strip() == DEFAULT_SKILL_CONTENT.strip():
@@ -182,9 +182,23 @@ class SkillManager:
                 "schema": "\n".join(current_schema),
             })
 
+        # 构建一个全局的表清单概览
+        all_tables_by_db = {}
+        for info in tables_info:
+            db = info["db"]
+            if db not in all_tables_by_db:
+                all_tables_by_db[db] = []
+            all_tables_by_db[db].append(info["table"])
+
+        table_list_overview = ["# 数据库表清单 (全局概览)\n"]
+        for db, tbs in all_tables_by_db.items():
+            table_list_overview.append(f"- **{db}**: {', '.join(tbs)}")
+        table_list_overview.append("\n---\n")
+        overview_str = "\n".join(table_list_overview)
+
         # 如果表数量较少，直接返回完整内容
         if len(tables_info) <= max_tables:
-            return content
+            return overview_str + content
 
         # 否则使用检索器
         retriever = TableRetriever(top_k=max_tables)
@@ -209,4 +223,4 @@ class SkillManager:
                 summary_lines.append(f"\n### 表: {table['table']}\n")
                 summary_lines.append(table['schema'])
                 
-        return "\n".join(summary_lines)
+        return overview_str + "\n".join(summary_lines)

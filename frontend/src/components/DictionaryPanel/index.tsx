@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
-import { listDictionary, addDictionary, updateDictionary, deleteDictionary } from '../api';
-import { t } from '../i18n';
+import { listDictionary, addDictionary, updateDictionary, deleteDictionary } from '../../api';
+import { t } from '../../i18n';
 import { X, Plus, Edit2, Trash2, Search, BookOpen, Save } from 'lucide-react';
-import './DictionaryPanel.css';
+import './index.css';
 
 interface DictionaryPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  currentDb?: string;
 }
 
-export default function DictionaryPanel({ isOpen, onClose }: DictionaryPanelProps) {
+export default function DictionaryPanel({ isOpen, onClose, currentDb }: DictionaryPanelProps) {
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -22,8 +23,10 @@ export default function DictionaryPanel({ isOpen, onClose }: DictionaryPanelProp
   const [fieldMappings, setFieldMappings] = useState('');
 
   useEffect(() => {
-    loadEntries();
-  }, []);
+    if (isOpen) {
+      loadEntries();
+    }
+  }, [isOpen, currentDb]);
 
   async function loadEntries() {
     setLoading(true);

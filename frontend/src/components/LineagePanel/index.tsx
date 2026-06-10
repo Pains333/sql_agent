@@ -1,17 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Network, X, Search, Plus, Save, Edit2, Trash2, ArrowRight, Zap } from 'lucide-react';
-import { listLineage, addLineage, updateLineage, deleteLineage, startParseSqlLineage, getParseTaskStatus } from '../api';
-import { LineageEntry } from '../types';
-import { t } from '../i18n';
-import LineageGraphModal from './LineageGraphModal';
-import './LineagePanel.css';
+import { listLineage, addLineage, updateLineage, deleteLineage, startParseSqlLineage, getParseTaskStatus } from '../../api';
+import { LineageEntry } from '../../types';
+import { t } from '../../i18n';
+import LineageGraphModal from '../LineageGraphModal';
+import './index.css';
 
 interface LineagePanelProps {
   isOpen: boolean;
   onClose: () => void;
+  currentDb?: string;
 }
 
-export default function LineagePanel({ isOpen, onClose }: LineagePanelProps) {
+export default function LineagePanel({ isOpen, onClose, currentDb }: LineagePanelProps) {
   const [entries, setEntries] = useState<LineageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -29,8 +30,10 @@ export default function LineagePanel({ isOpen, onClose }: LineagePanelProps) {
   const [showGraphModal, setShowGraphModal] = useState(false);
 
   useEffect(() => {
-    loadEntries();
-  }, []);
+    if (isOpen) {
+      loadEntries();
+    }
+  }, [isOpen, currentDb]);
 
   async function loadEntries() {
     try {

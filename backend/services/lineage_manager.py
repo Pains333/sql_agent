@@ -26,13 +26,17 @@ class LineageManager:
         with open(self.storage_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-    def list_lineage(self) -> List[Dict[str, Any]]:
-        return self._load()
+    def list_lineage(self, db_name: str = None) -> List[Dict[str, Any]]:
+        data = self._load()
+        if not db_name:
+            return data
+        return [e for e in data if e.get("db_name") in (None, "", db_name)]
 
-    def add_lineage(self, source_table: str, source_column: str, target_table: str, target_column: str, transform_logic: str) -> Dict[str, Any]:
+    def add_lineage(self, source_table: str, source_column: str, target_table: str, target_column: str, transform_logic: str, db_name: str = "") -> Dict[str, Any]:
         data = self._load()
         entry = {
             "id": str(uuid.uuid4()),
+            "db_name": db_name,
             "source_table": source_table.strip(),
             "source_column": source_column.strip(),
             "target_table": target_table.strip(),
@@ -66,14 +70,14 @@ class LineageManager:
             return True
         return False
 
-    def get_context_for_prompt(self) -> str:
-        data = self._load()
-        if not data:
+    def get_context_for_prompt(self, db_name: str = None) -> str:
+        lineage_data = self.list_lineage(db_name)
+        if not lineage_data:
             return ""
 
         lines = ["=== Business Data Lineage (数据血缘关系) ==="]
         lines.append("The following data lineage rules show how data flows between tables and how specific metrics are calculated:")
-        for e in data:
+        for e in lineage_data:
             src = f"{e['source_table']}.{e['source_column']}"
             dst = f"{e['target_table']}.{e['target_column']}"
             logic = e.get("transform_logic", "")

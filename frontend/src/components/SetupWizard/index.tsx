@@ -1,11 +1,11 @@
 
 import { useState, useEffect } from 'react';
-import type { SetupConfig, OllamaModel } from '../types';
-import { getOllamaModels, submitSetup } from '../api';
-import { t, setLang } from '../i18n';
-import type { Lang } from '../i18n';
+import type { SetupConfig, OllamaModel } from '../../types';
+import { getOllamaModels, submitSetup } from '../../api';
+import { t, setLang } from '../../i18n';
+import type { Lang } from '../../i18n';
 import { Eye, EyeOff, XCircle } from 'lucide-react';
-import './SetupWizard.css';
+import './index.css';
 
 interface SetupWizardProps {
   onComplete: () => void;

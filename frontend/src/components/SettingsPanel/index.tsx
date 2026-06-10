@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import type { Lang } from '../i18n';
-import { t } from '../i18n';
+import type { Lang } from '../../i18n';
+import { t } from '../../i18n';
 import {
   Settings, X, Moon, Sun, Globe,
 } from 'lucide-react';
-import './SettingsPanel.css';
+import './index.css';
 
 interface SettingsPanelProps {
   theme: 'light' | 'dark';

@@ -35,14 +35,15 @@ export async function resetSetup(): Promise<void> {
 }
 
 
-export async function listConversations(): Promise<ConversationSummary[]> {
-  return request<ConversationSummary[]>('/conversations');
+export async function listConversations(dbName?: string): Promise<ConversationSummary[]> {
+  const url = dbName ? `/conversations?db_name=${encodeURIComponent(dbName)}` : '/conversations';
+  return request<ConversationSummary[]>(url);
 }
 
-export async function createConversation(title = '新对话'): Promise<Conversation> {
+export async function createConversation(title = '新对话', dbName?: string): Promise<Conversation> {
   return request<Conversation>('/conversations', {
     method: 'POST',
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, database: dbName }),
   });
 }
 

@@ -1,8 +1,8 @@
 
 import { useEffect, useRef } from 'react';
-import { t } from '../i18n';
+import { t } from '../../i18n';
 import { Trash2 } from 'lucide-react';
-import './ContextMenu.css';
+import './index.css';
 
 interface ContextMenuProps {
   x: number;

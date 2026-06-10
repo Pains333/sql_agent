@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Conversation, ConversationSummary } from './types';
 import { setLang, getLang } from './i18n';
 import type { Lang } from './i18n';
@@ -10,7 +10,10 @@ import {
   deleteConversation,
   getSetupStatus,
   resetSetup,
+  listDatabases,
+  switchDatabase,
 } from './api';
+import type { DatabaseInfo } from './types';
 import SetupWizard from './components/SetupWizard';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
@@ -26,6 +29,14 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
   const [isLineageOpen, setIsLineageOpen] = useState(false);
+  const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
+
+  // Keep a ref to the latest activeId to avoid jumping back
+  // to an old conversation when a background stream finishes.
+  const activeIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -86,20 +97,42 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  const refreshList = useCallback(async () => {
+  const refreshList = useCallback(async (dbName?: string) => {
     try {
-      const list = await listConversations();
+      const list = await listConversations(dbName);
       setConversations(list);
     } catch (err) {
       console.error('获取对话列表失败:', err);
     }
   }, []);
 
+  const refreshDatabases = useCallback(async () => {
+    try {
+      const info = await listDatabases();
+      setDbInfo(info);
+      return info;
+    } catch { return null; }
+  }, []);
+
+  async function handleSwitchDb(db: string) {
+    try {
+      await switchDatabase(db);
+      await refreshDatabases();
+      setActiveId(null);
+      setActiveConv(null);
+      await refreshList(db);
+    } catch (err) {
+      console.error('Switch DB failed:', err);
+    }
+  }
+
   useEffect(() => {
     if (setupDone) {
-      refreshList();
+      refreshDatabases().then(info => {
+        refreshList(info?.current);
+      });
     }
-  }, [setupDone, refreshList]);
+  }, [setupDone, refreshList, refreshDatabases]);
 
   const loadConversation = useCallback(async (id: string) => {
     try {
@@ -113,8 +146,8 @@ export default function App() {
 
   async function _createAndActivate(): Promise<string | null> {
     try {
-      const conv = await createConversation();
-      await refreshList();
+      const conv = await createConversation('新对话', dbInfo?.current);
+      await refreshList(dbInfo?.current);
       setActiveId(conv.id);
       setActiveConv({ ...conv, messages: [] });
       return conv.id;
@@ -142,7 +175,7 @@ export default function App() {
         setActiveId(null);
         setActiveConv(null);
       }
-      await refreshList();
+      await refreshList(dbInfo?.current);
     } catch (err) {
       console.error('删除对话失败:', err);
     }
@@ -154,8 +187,10 @@ export default function App() {
   }
 
   async function handleMessageSent(convId: string) {
-    await loadConversation(convId);
-    await refreshList();
+    if (activeIdRef.current === convId) {
+      await loadConversation(convId);
+    }
+    await refreshList(dbInfo?.current);
   }
 
   function handleSetupComplete() {
@@ -208,15 +243,18 @@ export default function App() {
         onOpenLineage={() => setIsLineageOpen(prev => !prev)}
       />
       <ChatArea
+        key={activeConv?.id || 'new'}
         conversation={activeConv}
         onMessageSent={handleMessageSent}
         onAutoCreate={handleAutoCreate}
         sidebarCollapsed={!sidebarOpen}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         lang={lang}
+        dbInfo={dbInfo}
+        onSwitchDb={handleSwitchDb}
       />
-      <DictionaryPanel isOpen={isDictionaryOpen} onClose={() => setIsDictionaryOpen(false)} />
-      <LineagePanel isOpen={isLineageOpen} onClose={() => setIsLineageOpen(false)} />
+      <DictionaryPanel isOpen={isDictionaryOpen} onClose={() => setIsDictionaryOpen(false)} currentDb={dbInfo?.current} />
+      <LineagePanel isOpen={isLineageOpen} onClose={() => setIsLineageOpen(false)} currentDb={dbInfo?.current} />
     </div>
   );
 }

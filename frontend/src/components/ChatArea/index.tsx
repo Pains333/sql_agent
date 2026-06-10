@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { Conversation, Message, UploadResult, DatabaseInfo } from '../types';
-import { sendMessage, sendMessageStream, uploadFile, deleteUpload, executeSQL, cancelExecution, listDatabases, switchDatabase } from '../api';
-import { t } from '../i18n';
+import type { Conversation, Message, UploadResult, DatabaseInfo } from '../../types';
+import { sendMessage, sendMessageStream, uploadFile, deleteUpload, executeSQL, cancelExecution, listDatabases, switchDatabase } from '../../api';
+import { t } from '../../i18n';
 import { Menu, LayoutGrid, Bot, Paperclip, X, Send } from 'lucide-react';
-import MessageBubble from './MessageBubble';
-import SchemaDrawer from './SchemaDrawer';
-import './ChatArea.css';
+import MessageBubble from '../MessageBubble';
+import SchemaDrawer from '../SchemaDrawer';
+import { streamStore } from '../../streamStore';
+import './index.css';
 
 interface ChatAreaProps {
   conversation: Conversation | null;
@@ -14,6 +15,8 @@ interface ChatAreaProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   lang?: string;
+  dbInfo: DatabaseInfo | null;
+  onSwitchDb: (db: string) => void;
 }
 
 const ACCEPTED_FORMATS = '.xlsx,.xls,.csv,.pkl,.parquet,.json';
@@ -24,18 +27,25 @@ const COMMANDS = [
   { name: '/describe', desc: 'cmd.describe' as const, message: t('cmd.describeMsg' as any) },
 ];
 
-export default function ChatArea({ conversation, onMessageSent, onAutoCreate, sidebarCollapsed, onToggleSidebar, lang = 'zh' }: ChatAreaProps) {
+export default function ChatArea({ conversation, onMessageSent, onAutoCreate, sidebarCollapsed, onToggleSidebar, lang = 'zh', dbInfo, onSwitchDb }: ChatAreaProps) {
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  
+  const currentConvId = conversation?.id || 'new';
+  const [streamState, setStreamState] = useState(() => streamStore.getState(currentConvId));
+  
+  useEffect(() => {
+    setStreamState(streamStore.getState(currentConvId));
+    return streamStore.subscribe(currentConvId, setStreamState);
+  }, [currentConvId]);
+
+  const { loading, content: streamingContent, optimisticMsg: pendingUserMessage } = streamState;
+
   const [attachment, setAttachment] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [streamingContent, setStreamingContent] = useState('');
   const [showCommands, setShowCommands] = useState(false);
   const [selectedCmd, setSelectedCmd] = useState(0);
   const [schemaOpen, setSchemaOpen] = useState(false);
-  const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
-  const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,26 +61,6 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
     inputRef.current?.focus();
   }, [conversation?.id]);
 
-  // Load database list
-  const refreshDatabases = useCallback(async () => {
-    try {
-      const info = await listDatabases();
-      setDbInfo(info);
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => {
-    refreshDatabases();
-  }, [refreshDatabases]);
-
-  async function handleSwitchDb(db: string) {
-    try {
-      await switchDatabase(db);
-      await refreshDatabases();
-    } catch (err) {
-      console.error('Switch DB failed:', err);
-    }
-  }
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -102,15 +92,18 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
     const text = input.trim();
     setInput('');
     setShowCommands(false);
-    setLoading(true);
-    setStreamingContent('');
     const currentUploadId = attachment?.upload_id;
 
+    let convId = conversation?.id ?? null;
     try {
-      let convId = conversation?.id ?? null;
       if (!convId) {
+        // Temporarily set a generic loading state if creating a new conv
+        streamStore.updateState('new', prev => ({ ...prev, loading: true, content: '' }));
         convId = await onAutoCreate(text);
-        if (!convId) { setLoading(false); return; }
+        if (!convId) { 
+          streamStore.updateState('new', prev => ({ ...prev, loading: false }));
+          return; 
+        }
       }
 
       // Optimistic UI: show user message immediately
@@ -120,26 +113,30 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
         content: text,
         timestamp: new Date().toISOString(),
       };
-      setPendingUserMessage(optimisticMsg);
+      
+      streamStore.updateState(convId, prev => ({
+        ...prev,
+        loading: true,
+        content: '',
+        optimisticMsg
+      }));
 
       // Streaming mode
       try {
         await new Promise<void>((resolve, reject) => {
           abortRef.current = sendMessageStream(convId!, text, currentUploadId, {
             onThinking: (token) => {
-              setStreamingContent((prev) => prev + token);
+              streamStore.updateState(convId!, prev => ({ ...prev, content: prev.content + token }));
             },
             onPlan: (_plan) => {
-              setStreamingContent('');
+              streamStore.updateState(convId!, prev => ({ ...prev, content: '', optimisticMsg: null }));
               setAttachment(null);
-              setPendingUserMessage(null);
               onMessageSent(convId!);
               resolve();
             },
             onResult: (_msg) => {
-              setStreamingContent('');
+              streamStore.updateState(convId!, prev => ({ ...prev, content: '', optimisticMsg: null }));
               setAttachment(null);
-              setPendingUserMessage(null);
               onMessageSent(convId!);
               resolve();
             },
@@ -147,8 +144,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
               reject(new Error(err));
             },
             onDone: () => {
-              setStreamingContent('');
-              setPendingUserMessage(null);
+              streamStore.updateState(convId!, prev => ({ ...prev, content: '', optimisticMsg: null }));
               onMessageSent(convId!);
               resolve();
             },
@@ -156,18 +152,18 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
         });
       } catch {
         // Fallback to non-streaming
-        setStreamingContent('');
+        streamStore.updateState(convId!, prev => ({ ...prev, content: '' }));
         await sendMessage(convId!, text, currentUploadId, lang);
         setAttachment(null);
-        setPendingUserMessage(null);
+        streamStore.updateState(convId!, prev => ({ ...prev, optimisticMsg: null }));
         onMessageSent(convId!);
       }
     } catch (err) {
       console.error('Send failed:', err);
     } finally {
-      setLoading(false);
-      setStreamingContent('');
-      setPendingUserMessage(null);
+      if (convId) {
+        streamStore.updateState(convId, prev => ({ ...prev, loading: false, content: '', optimisticMsg: null }));
+      }
       abortRef.current = null;
     }
   }
@@ -262,7 +258,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
           <select
             className="db-switcher"
             value={dbInfo.current}
-            onChange={(e) => handleSwitchDb(e.target.value)}
+            onChange={(e) => onSwitchDb(e.target.value)}
             title={t('db.switch')}
             style={{
               padding: '5px 28px 5px 10px',
@@ -322,7 +318,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
                 />
               ))}
               {/* Optimistic user message (shown before server confirms) */}
-              {pendingUserMessage && (
+              {pendingUserMessage && (!conversation?.messages.length || conversation.messages[conversation.messages.length - 1].content !== pendingUserMessage.content) && (
                 <MessageBubble
                   key={pendingUserMessage.id}
                   message={pendingUserMessage}
@@ -443,7 +439,11 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
 
         {/* Schema Drawer */}
         {schemaOpen && dbInfo && (
-          <SchemaDrawer currentDb={dbInfo.current} onClose={() => setSchemaOpen(false)} />
+          <SchemaDrawer 
+            currentDb={dbInfo.current} 
+            onClose={() => setSchemaOpen(false)} 
+            refreshKey={conversation?.updated_at || 0}
+          />
         )}
       </div>
     </main>

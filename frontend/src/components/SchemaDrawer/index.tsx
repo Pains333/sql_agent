@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { TableColumn } from '../types';
-import { listTables, describeTable, previewTable } from '../api';
-import DataPreviewModal from './DataPreviewModal';
-import ERDiagramModal from './ERDiagramModal';
-import { t } from '../i18n';
+import type { TableColumn } from '../../types';
+import { listTables, describeTable, previewTable } from '../../api';
+import DataPreviewModal from '../DataPreviewModal';
+import ERDiagramModal from '../ERDiagramModal';
+import { t } from '../../i18n';
 import { X, Database, ChevronDown, ChevronRight, Table2, Eye, Network } from 'lucide-react';
-import './SchemaDrawer.css';
+import './index.css';
 
 interface SchemaDrawerProps {
   currentDb: string;
   onClose: () => void;
+  refreshKey?: string | number;
 }
 
-export default function SchemaDrawer({ currentDb, onClose }: SchemaDrawerProps) {
+export default function SchemaDrawer({ currentDb, onClose, refreshKey }: SchemaDrawerProps) {
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
@@ -59,7 +60,7 @@ export default function SchemaDrawer({ currentDb, onClose }: SchemaDrawerProps) 
       .then((res) => setTables(res.tables))
       .catch(() => setTables([]))
       .finally(() => setLoading(false));
-  }, [currentDb]);
+  }, [currentDb, refreshKey]);
 
   async function toggleTable(tableName: string) {
     setExpandedTables(prev => {

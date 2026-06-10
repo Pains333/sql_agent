@@ -57,6 +57,8 @@ create_db | drop_db | create_table | drop_table | alter_table | query | insert |
 5. DROP 操作在 explanation 中警告
 6. 当用户消息提到"附件"或"文件"且要求写入某个表时，action 用 import_file，sql 留空，explanation 中说明目标表名，database 填目标数据库名。JSON 格式：{{"action":"import_file","sql":"","explanation":"将附件数据导入到 xxx 表","database":"...","target_table":"表名"}}
 7. 必须严格遵守并优先应用下方【业务规则与数据字典】中的名词定义、SQL 示例和字段枚举映射。如果用户的意图匹配了业务术语，请直接使用字典中提供的 SQL 或逻辑。
+8. 建表前务必检查【当前数据库状态】中的表名单。如果发现你要创建的表名已经存在，请主动为主表和相关的关联表添加后缀（如 _v2, _new）生成新的表名以避免冲突。
+9. 当执行全局或批量操作（如“删除所有的表”）时，**必须且只能**依据下方【当前数据库状态 -> 全局概览】中列出的真实表名来生成 SQL。绝不能仅凭对话历史记忆或自行捏造未出现的表名。
 
 ## {db_type_display} 特定规则：
 {db_specific_rules}
@@ -135,8 +137,9 @@ AUTO_FIX_PROMPT = """你是 {db_type_display} 数据库助手。之前生成的 
 ## 修正要求：
 1. 仔细分析错误原因（拼写错误？表/列不存在？语法问题？）
 2. 参考当前数据库状态中的真实表名和列名
-3. 生成修正后的 SQL
-4. 这是第 {attempt} 次修正尝试（最多 {max_attempts} 次）
+3. 如果错误是表或对象已存在 (already exists)，请尝试为要创建的对象自动加后缀换个新名字（如 _v2, _new 等），或者在不破坏用户意图的前提下使用 IF NOT EXISTS。
+4. 生成修正后的 SQL
+5. 这是第 {attempt} 次修正尝试（最多 {max_attempts} 次）
 
 ## 输出格式（严格 JSON，不要包裹 markdown）：
 {{"action":"{action}","sql":"修正后的SQL","explanation":"修正说明：原因 + 改了什么","database":"{current_db}"}}

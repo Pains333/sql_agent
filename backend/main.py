@@ -198,9 +198,7 @@ def handle_special_command(command: str, agent: SQLAgent) -> bool:
         return True
 
     elif cmd == "\\clear":
-        agent.llm.reset_history()
-        console.print("[bold cyan]🔄 对话历史已清除[/bold cyan]")
-        return True
+        return "CLEAR_HISTORY"
 
     elif cmd == "\\help":
         help_text = """
@@ -253,6 +251,8 @@ def main():
         print_error(f"初始化失败: {e}")
         sys.exit(1)
 
+    history = []
+
     while True:
         try:
             # 显示提示符
@@ -265,12 +265,17 @@ def main():
                 continue
 
             # 检查是否是特殊命令
-            if handle_special_command(user_input, agent):
+            spec_res = handle_special_command(user_input, agent)
+            if spec_res == "CLEAR_HISTORY":
+                history = []
+                console.print("[bold cyan]🔄 对话历史已清除[/bold cyan]")
+                continue
+            elif spec_res:
                 continue
 
             # 第一阶段：LLM 思考（在 spinner 中）
             with console.status("[bold cyan]🤔 思考中...[/bold cyan]", spinner="dots"):
-                plan = agent.think(user_input)
+                plan = agent.think(user_input, history=history)
 
             # 第二阶段：确认 + 执行（在 spinner 外，允许交互式输入）
             result = agent.execute_plan(plan, confirm_callback=confirm_ddl)
@@ -308,6 +313,12 @@ def main():
 
                 elif isinstance(res, str):
                     print_success(res)
+                
+                # 更新历史记录
+                history.append({"role": "user", "content": user_input})
+                history.append({"role": "assistant", "content": result["explanation"] or "操作已执行"})
+                if len(history) > 20:
+                    history = history[-16:]
 
             console.print()
 

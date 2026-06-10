@@ -40,12 +40,13 @@ class ConversationStore:
             except Exception:
                 pass
 
-    def create_conversation(self, title: str = "新对话") -> dict:
+    def create_conversation(self, title: str = "新对话", db_name: str = "") -> dict:
         """
         创建新对话
 
         Args:
             title: 对话标题
+            db_name: 绑定的数据库名称
 
         Returns:
             新创建的对话对象
@@ -58,6 +59,7 @@ class ConversationStore:
         conversation = {
             "id": conv_id,
             "title": title,
+            "db_name": db_name,
             "created_at": now,
             "updated_at": now,
             "messages": [],
@@ -68,9 +70,12 @@ class ConversationStore:
         os.chmod(path, 0o600)
         return conversation
 
-    def list_conversations(self) -> list:
+    def list_conversations(self, db_name: str = None) -> list:
         """
         获取所有对话列表（不含消息内容，按更新时间倒序）
+
+        Args:
+            db_name: 可选，按数据库名过滤
 
         Returns:
             对话摘要列表
@@ -83,9 +88,14 @@ class ConversationStore:
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                conv_db = data.get("db_name")
+                if db_name and conv_db and conv_db != db_name:
+                    continue
+
                 conversations.append({
                     "id": data["id"],
                     "title": data["title"],
+                    "db_name": conv_db,
                     "created_at": data["created_at"],
                     "updated_at": data["updated_at"],
                     "message_count": len(data.get("messages", [])),
