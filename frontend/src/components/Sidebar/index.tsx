@@ -4,7 +4,7 @@ import type { ConversationSummary, HealthStatus } from '../../types';
 import type { Lang } from '../../i18n';
 import { t, getLang } from '../../i18n';
 import { healthCheck } from '../../api';
-import { Plus, LogOut, MessageSquare, Settings, ChevronLeft, ChevronRight, BookOpen, Network } from 'lucide-react';
+import { Plus, LogOut, MessageSquare, Settings, ChevronLeft, ChevronRight, BookOpen, Network, Database } from 'lucide-react';
 import ContextMenu from '../ContextMenu';
 import SettingsPanel from '../SettingsPanel';
 import './index.css';
@@ -92,6 +92,9 @@ export default function Sidebar({
       {/* Logo / Header */}
       <div className="sidebar-header">
         <div className="sidebar-logo">
+          <div className="logo-icon">
+            <Database size={18} />
+          </div>
           <span className="logo-text">SQL Agent</span>
         </div>
         <div className="header-btns">

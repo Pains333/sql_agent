@@ -1,41 +1,38 @@
 .er-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
+  inset: 0;
+  background: var(--bg-overlay);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px;
-  animation: erFadeIn 0.2s ease-out;
+  padding: 40px;
+  animation: modalOverlayFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes erFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes modalOverlayFadeIn {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to { opacity: 1; backdrop-filter: var(--glass-filter); }
 }
 
 .er-modal-container {
-  width: 100%;
-  max-width: 1200px;
-  height: calc(100vh - 64px);
+  width: 90vw;
+  height: 90vh;
   background: var(--bg-surface);
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: modalScaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   border: 1px solid var(--border);
-  animation: erSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes erSlideUp {
-  from { opacity: 0; transform: translateY(20px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes modalScaleIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .er-modal-header {
@@ -44,42 +41,37 @@
   justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
+  background: var(--bg-surface-secondary);
 }
 
 .er-modal-title {
   font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .er-modal-title span {
+  font-weight: 700;
   color: var(--accent);
-  background: var(--accent-bg);
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 14px;
+  margin-right: 6px;
 }
 
 .er-modal-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
 }
 
 .er-modal-controls button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -89,63 +81,47 @@
   color: var(--text-primary);
 }
 
-.er-modal-controls .er-close-btn:hover {
-  background: var(--error-bg, #fee2e2);
-  color: var(--error, #ef4444);
-  border-color: transparent;
-}
-
 .er-zoom-level {
+  font-family: var(--font-mono);
   font-size: 13px;
-  font-family: 'Inter', sans-serif;
   color: var(--text-secondary);
-  min-width: 44px;
+  min-width: 48px;
   text-align: center;
+  user-select: none;
 }
 
 .er-modal-divider {
   width: 1px;
   height: 20px;
   background: var(--border);
-  margin: 0 4px;
+  margin: 0 8px;
+}
+
+.er-close-btn {
+  color: var(--text-secondary) !important;
+}
+
+.er-close-btn:hover {
+  background: var(--error-bg) !important;
+  color: var(--error) !important;
 }
 
 .er-modal-body {
   flex: 1;
+  overflow: hidden;
   position: relative;
   background: var(--bg-primary);
-  overflow: hidden;
-}
-
-.er-canvas-container {
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  padding: 32px;
-}
-
-.er-canvas-container.hidden {
-  display: none;
-}
-
-.er-canvas {
-  display: inline-block;
-  min-width: min-content;
-  min-height: min-content;
-  transform-origin: 0 0;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .er-loading {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 16px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -155,23 +131,92 @@
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: erSpin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
-@keyframes erSpin {
+@keyframes spin {
   to { transform: rotate(360deg); }
 }
 
 .er-error {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--error-bg, #fee2e2);
-  color: var(--error, #ef4444);
-  padding: 16px 24px;
-  border-radius: 8px;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--error);
   font-size: 14px;
-  max-width: 80%;
-  text-align: center;
+  background: var(--error-bg);
+}
+
+.er-canvas-container {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  cursor: grab;
+}
+
+.er-canvas-container:active {
+  cursor: grabbing;
+}
+
+.er-canvas-container.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.er-canvas {
+  min-width: 100%;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+/* Override Mermaid Defaults to fit our theme */
+.er-canvas svg {
+  max-width: none !important;
+}
+
+.er-canvas .entityBox {
+  fill: var(--bg-surface) !important;
+  stroke: var(--border-strong) !important;
+  rx: 8px;
+  ry: 8px;
+}
+
+.er-canvas .entityLabel {
+  fill: var(--text-primary) !important;
+  font-weight: 600 !important;
+  font-family: var(--font-sans) !important;
+}
+
+.er-canvas .attributeBoxOdd,
+.er-canvas .attributeBoxEven {
+  fill: var(--bg-primary) !important;
+  stroke: var(--border) !important;
+}
+
+.er-canvas .attributeLabel {
+  fill: var(--text-secondary) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+}
+
+.er-canvas .relationshipLine {
+  stroke: var(--text-faint) !important;
+  stroke-width: 1.5px !important;
+}
+
+.er-canvas .relationshipLabelBox {
+  fill: var(--bg-surface) !important;
+  stroke: var(--border) !important;
+  rx: 4px;
+  ry: 4px;
+}
+
+.er-canvas .relationshipLabel {
+  fill: var(--text-muted) !important;
+  font-size: 11px !important;
 }

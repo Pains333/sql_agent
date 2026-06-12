@@ -37,11 +37,11 @@ class LineageManager:
         entry = {
             "id": str(uuid.uuid4()),
             "db_name": db_name,
-            "source_table": source_table.strip(),
-            "source_column": source_column.strip(),
-            "target_table": target_table.strip(),
-            "target_column": target_column.strip(),
-            "transform_logic": transform_logic.strip(),
+            "source_table": (source_table or "").strip(),
+            "source_column": (source_column or "").strip(),
+            "target_table": (target_table or "").strip(),
+            "target_column": (target_column or "").strip(),
+            "transform_logic": (transform_logic or "").strip(),
             "created_at": datetime.now().isoformat()
         }
         data.append(entry)
@@ -52,11 +52,11 @@ class LineageManager:
         data = self._load()
         for entry in data:
             if entry["id"] == entry_id:
-                entry["source_table"] = source_table.strip()
-                entry["source_column"] = source_column.strip()
-                entry["target_table"] = target_table.strip()
-                entry["target_column"] = target_column.strip()
-                entry["transform_logic"] = transform_logic.strip()
+                entry["source_table"] = (source_table or "").strip()
+                entry["source_column"] = (source_column or "").strip()
+                entry["target_table"] = (target_table or "").strip()
+                entry["target_column"] = (target_column or "").strip()
+                entry["transform_logic"] = (transform_logic or "").strip()
                 entry["updated_at"] = datetime.now().isoformat()
                 self._save(data)
                 return entry

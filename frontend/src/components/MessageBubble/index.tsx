@@ -71,7 +71,7 @@ export default function MessageBubble({ message, onExecute, onCancel }: MessageB
         {isUser ? (
           <User size={16} color="white" />
         ) : (
-          <Bot size={16} color="white" />
+          <Bot size={16} className="ai-icon" />
         )}
       </div>
 

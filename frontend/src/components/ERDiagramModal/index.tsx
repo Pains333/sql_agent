@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import mermaid from 'mermaid';
 import { X, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { getErDiagram } from '../../api';
@@ -100,7 +101,7 @@ export default function ERDiagramModal({ database, onClose }: ERDiagramModalProp
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.2, 0.3));
   const handleResetZoom = () => setZoom(1);
 
-  return (
+  return createPortal(
     <div className="er-modal-overlay" onClick={onClose}>
       <div className="er-modal-container" onClick={e => e.stopPropagation()}>
         <div className="er-modal-header">
@@ -140,6 +141,7 @@ export default function ERDiagramModal({ database, onClose }: ERDiagramModalProp
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

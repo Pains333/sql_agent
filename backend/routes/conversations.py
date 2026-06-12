@@ -169,18 +169,15 @@ def _handle_import_file(ag, conv_id: str, plan: dict, file_data: dict, upload_id
 
 
 @router.get("/api/conversations")
-def list_conversations(db_name: Optional[str] = None):
+def list_conversations():
     """获取所有对话列表"""
-    return store.list_conversations(db_name=db_name)
+    return store.list_conversations()
 
 
 @router.post("/api/conversations")
 def create_conversation(req: ConversationCreate):
     """创建新对话"""
-    ag = require_agent()
-    # 如果请求中未指定数据库，则默认使用当前 agent 所在的数据库
-    db_name = req.database or ag.db.current_db
-    return store.create_conversation(title=req.title, db_name=db_name)
+    return store.create_conversation(title=req.title, db_name="")
 
 
 @router.get("/api/conversations/{conv_id}")
@@ -382,10 +379,10 @@ def send_message_stream(conv_id: str, req: MessageRequest):
         try:
             # 流式思考阶段
             skill_context = ag.skill.get_relevant_summary(user_input, max_tables=15)
-            business_rules = ag.dictionary.get_context_for_prompt(ag.db.current_db)
-            lineage_context = ag.lineage.get_context_for_prompt(ag.db.current_db)
+            business_rules = ag.dictionary.get_context_for_prompt()
+            lineage_context = ag.lineage.get_context_for_prompt()
             system_prompt = build_system_prompt(
-                skill_context, ag.db.current_db, ag.db_type, language=req.language, business_rules=business_rules, lineage_context=lineage_context
+                skill_context, ag.db_type, language=req.language, business_rules=business_rules, lineage_context=lineage_context
             )
 
             full_response = ""

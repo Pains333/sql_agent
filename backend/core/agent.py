@@ -208,10 +208,10 @@ class SQLAgent:
         try:
             # 1. 构建系统提示词，注入当前数据库状态和业务字典
             skill_context = self.skill.get_relevant_summary(user_input, max_tables=15)
-            business_rules = self.dictionary.get_context_for_prompt(self.db.current_db)
-            lineage_context = self.lineage.get_context_for_prompt(self.db.current_db)
+            business_rules = self.dictionary.get_context_for_prompt()
+            lineage_context = self.lineage.get_context_for_prompt()
             system_prompt = build_system_prompt(
-                skill_context, self.db.current_db, self.db_type, language, business_rules, lineage_context
+                skill_context, self.db_type, language, business_rules, lineage_context
             )
 
             # 2. 调用 LLM
@@ -328,6 +328,17 @@ class SQLAgent:
 
     def _execute_sql(self, action: str, sql: str):
         """根据 action 类型执行 SQL"""
+        # 跨物理库校验拦截 (PostgreSQL)
+        if self.db_type == "postgresql":
+            import re
+            known_dbs = self.db.list_databases()
+            used_dbs = set()
+            for db in known_dbs:
+                if re.search(r'\b' + re.escape(db) + r'\.', sql):
+                    used_dbs.add(db)
+            if len(used_dbs) > 1:
+                raise Exception(f"PostgreSQL 不支持直接的物理跨库 JOIN (检测到访问了多个库 {used_dbs})。请使用 Python 脚本分步查询并在内存中合并，或分别给出不同库的查询结果。")
+                
         method_name = self._ACTION_DISPATCH.get(action, "execute_query")
         return getattr(self.db, method_name)(sql)
 

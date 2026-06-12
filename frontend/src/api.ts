@@ -169,13 +169,6 @@ export async function listDatabases(): Promise<DatabaseInfo> {
   return request<DatabaseInfo>('/databases');
 }
 
-export async function switchDatabase(database: string): Promise<{ success: boolean; message: string; current: string }> {
-  return request('/databases/switch', {
-    method: 'POST',
-    body: JSON.stringify({ database }),
-  });
-}
-
 export async function listTables(db: string): Promise<{ database: string; tables: string[] }> {
   return request(`/databases/${encodeURIComponent(db)}/tables`);
 }

@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import type { Conversation, Message, UploadResult, DatabaseInfo } from '../../types';
-import { sendMessage, sendMessageStream, uploadFile, deleteUpload, executeSQL, cancelExecution, listDatabases, switchDatabase } from '../../api';
+import { useState, useRef, useEffect } from 'react';
+import type { Conversation, Message, UploadResult } from '../../types';
+import { sendMessage, sendMessageStream, uploadFile, deleteUpload, executeSQL, cancelExecution } from '../../api';
 import { t } from '../../i18n';
 import { Menu, LayoutGrid, Bot, Paperclip, X, Send } from 'lucide-react';
 import MessageBubble from '../MessageBubble';
@@ -15,8 +15,6 @@ interface ChatAreaProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   lang?: string;
-  dbInfo: DatabaseInfo | null;
-  onSwitchDb: (db: string) => void;
 }
 
 const ACCEPTED_FORMATS = '.xlsx,.xls,.csv,.pkl,.parquet,.json';
@@ -27,7 +25,7 @@ const COMMANDS = [
   { name: '/describe', desc: 'cmd.describe' as const, message: t('cmd.describeMsg' as any) },
 ];
 
-export default function ChatArea({ conversation, onMessageSent, onAutoCreate, sidebarCollapsed, onToggleSidebar, lang = 'zh', dbInfo, onSwitchDb }: ChatAreaProps) {
+export default function ChatArea({ conversation, onMessageSent, onAutoCreate, sidebarCollapsed, onToggleSidebar, lang = 'zh' }: ChatAreaProps) {
   const [input, setInput] = useState('');
   
   const currentConvId = conversation?.id || 'new';
@@ -60,6 +58,14 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
   useEffect(() => {
     inputRef.current?.focus();
   }, [conversation?.id]);
+
+  // Auto-resize chat input
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 200) + 'px';
+    }
+  }, [input]);
 
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -246,41 +252,8 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
     <main className="chat-area">
       {/* Header with hamburger, DB switcher, schema toggle */}
       <div className="chat-header">
-        <button
-          className={`hamburger-btn ${sidebarCollapsed ? 'visible' : ''}`}
-          onClick={onToggleSidebar}
-        >
-          <Menu size={18} />
-        </button>
 
-        {/* Database Switcher */}
-        {dbInfo && (
-          <select
-            className="db-switcher"
-            value={dbInfo.current}
-            onChange={(e) => onSwitchDb(e.target.value)}
-            title={t('db.switch')}
-            style={{
-              padding: '5px 28px 5px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              background: 'var(--bg-surface)',
-              color: 'var(--text-secondary)',
-              fontSize: 13,
-              fontFamily: "'Inter', sans-serif",
-              cursor: 'pointer',
-              outline: 'none',
-              appearance: 'none' as const,
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%239ca3af' d='M5 7L1 3h8z'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 8px center',
-            }}
-          >
-            {dbInfo.databases.map((db) => (
-              <option key={db} value={db}>{db}</option>
-            ))}
-          </select>
-        )}
+
 
         <div className="chat-header-spacer" />
 
@@ -327,7 +300,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
               {streamingContent && (
                 <div className="message-row assistant">
                   <div className="avatar avatar-ai">
-                    <Bot size={16} color="white" />
+                    <Bot size={16} className="ai-icon" />
                   </div>
                   <div className="bubble bubble-ai">
                     <div className="streaming-content">
@@ -340,7 +313,7 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
               {loading && !streamingContent && (
                 <div className="message-row assistant">
                   <div className="avatar avatar-ai">
-                    <Bot size={16} color="white" />
+                    <Bot size={16} className="ai-icon" />
                   </div>
                   <div className="bubble bubble-ai">
                     <div className="typing-indicator">
@@ -438,9 +411,8 @@ export default function ChatArea({ conversation, onMessageSent, onAutoCreate, si
         </div>
 
         {/* Schema Drawer */}
-        {schemaOpen && dbInfo && (
+        {schemaOpen && (
           <SchemaDrawer 
-            currentDb={dbInfo.current} 
             onClose={() => setSchemaOpen(false)} 
             refreshKey={conversation?.updated_at || 0}
           />

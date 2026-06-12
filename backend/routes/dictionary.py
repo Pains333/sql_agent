@@ -22,21 +22,19 @@ class DictionaryEntryUpdate(BaseModel):
 async def list_dictionary():
     if not state.agent:
         raise HTTPException(status_code=400, detail="Agent 未初始化")
-    current_db = state.agent.db.current_db if state.agent.db else None
-    return {"entries": state.agent.dictionary.list_entries(db_name=current_db)}
+    return {"entries": state.agent.dictionary.list_entries()}
 
 @router.post("")
 async def add_dictionary_entry(req: DictionaryEntryCreate):
     if not state.agent:
         raise HTTPException(status_code=400, detail="Agent 未初始化")
     try:
-        current_db = state.agent.db.current_db if state.agent.db else ""
         entry = state.agent.dictionary.add_entry(
             term=req.term,
             definition=req.definition,
             sql_hint=req.sql_hint,
             field_mappings=req.field_mappings,
-            db_name=current_db
+            db_name=""
         )
         return {"success": True, "entry": entry}
     except Exception as e:

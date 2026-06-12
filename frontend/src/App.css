@@ -1,133 +1,140 @@
 /* ============================================
-   Global Styles — Theming with CSS Variables
+   Global Styles — Theming with CSS Variables & Glassmorphism
    ============================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-/* ---- Light Theme (default) ---- */
+/* ---- Light Theme (Premium) ---- */
 :root {
-  --bg-primary: #f5f6fa;
-  --bg-surface: #ffffff;
-  --bg-surface-secondary: #f8f9fb;
-  --bg-surface-hover: #f0f1f5;
-  --bg-inset: #f3f4f6;
-  --bg-overlay: rgba(245, 246, 250, 0.92);
+  --bg-primary: #f8fafc;
+  --bg-surface: rgba(255, 255, 255, 0.85);
+  --bg-surface-secondary: rgba(248, 250, 252, 0.75);
+  --bg-surface-hover: rgba(241, 245, 249, 0.8);
+  --bg-inset: #f1f5f9;
+  --bg-overlay: rgba(255, 255, 255, 0.7);
+  --bg-body: #ffffff;
 
-  --text-primary: #1f2937;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
-  --text-faint: #c4c7cc;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
 
   --border: rgba(0, 0, 0, 0.06);
-  --border-strong: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.12);
 
-  --accent: #6366f1;
-  --accent-hover: #8b5cf6;
-  --accent-bg: rgba(99, 102, 241, 0.06);
-  --accent-bg-strong: rgba(99, 102, 241, 0.12);
-  --accent-border: rgba(99, 102, 241, 0.12);
-  --accent-shadow: rgba(99, 102, 241, 0.2);
+  /* Vivid Purple to Neon Blue Accent */
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-light: #c4b5fd;
+  --accent-bg: rgba(139, 92, 246, 0.08);
+  --accent-bg-strong: rgba(139, 92, 246, 0.15);
+  --accent-border: rgba(139, 92, 246, 0.2);
+  --accent-shadow: rgba(139, 92, 246, 0.25);
 
   --success: #10b981;
   --success-deep: #059669;
-  --success-bg: rgba(16, 185, 129, 0.06);
+  --success-bg: rgba(16, 185, 129, 0.08);
   --success-shadow: rgba(16, 185, 129, 0.2);
 
-  --error: #dc2626;
-  --error-bg: rgba(239, 68, 68, 0.05);
-  --error-border: rgba(239, 68, 68, 0.1);
-  --error-hover-bg: rgba(239, 68, 68, 0.06);
+  --error: #ef4444;
+  --error-bg: rgba(239, 68, 68, 0.08);
+  --error-border: rgba(239, 68, 68, 0.15);
+  --error-hover-bg: rgba(239, 68, 68, 0.12);
 
-  --warning: #b45309;
-  --warning-bg: rgba(245, 158, 11, 0.05);
-  --warning-border: rgba(245, 158, 11, 0.1);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.08);
+  --warning-border: rgba(245, 158, 11, 0.15);
 
-  --sql-bg: #1a1b2e;
-  --sql-header-bg: rgba(255, 255, 255, 0.04);
-  --sql-header-text: #7c7f96;
-  --sql-text: #a5b4fc;
-  --sql-border: rgba(255, 255, 255, 0.06);
+  --sql-bg: rgba(15, 23, 42, 0.95);
+  --sql-header-bg: rgba(255, 255, 255, 0.05);
+  --sql-header-text: #94a3b8;
+  --sql-text: #e2e8f0;
+  --sql-border: rgba(255, 255, 255, 0.1);
 
-  --bubble-user-from: #6366f1;
-  --bubble-user-to: #8b5cf6;
-  --bubble-ai-bg: #ffffff;
-  --bubble-ai-border: rgba(0, 0, 0, 0.05);
+  --bubble-user-bg: rgba(139, 92, 246, 0.85);
+  --bubble-user-shadow: rgba(139, 92, 246, 0.25);
+  --bubble-ai-bg: rgba(255, 255, 255, 0.9);
+  --bubble-ai-border: rgba(0, 0, 0, 0.04);
 
-  --input-bg: #ffffff;
-  --input-border: rgba(0, 0, 0, 0.07);
-  --input-placeholder: #b0b3ba;
-  --input-disabled-bg: #e8e9ee;
+  --input-bg: rgba(255, 255, 255, 0.85);
+  --input-border: rgba(0, 0, 0, 0.08);
+  --input-placeholder: #94a3b8;
+  --input-disabled-bg: #e2e8f0;
 
-  --scrollbar: rgba(0, 0, 0, 0.08);
-  --scrollbar-hover: rgba(0, 0, 0, 0.15);
+  --scrollbar: rgba(0, 0, 0, 0.06);
+  --scrollbar-hover: rgba(0, 0, 0, 0.12);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.1);
-  --shadow-card: 0 24px 80px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 8px -2px rgba(15, 23, 42, 0.05), 0 1px 4px -1px rgba(15, 23, 42, 0.03);
+  --shadow-md: 0 8px 24px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -3px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 16px 32px -8px rgba(15, 23, 42, 0.12), 0 8px 16px -6px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 24px 64px -12px rgba(15, 23, 42, 0.15), 0 12px 32px -8px rgba(15, 23, 42, 0.08);
+
+  --glass-filter: blur(24px) saturate(150%);
+  --font-sans: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
 }
 
-/* ---- Dark Theme ---- */
+/* ---- Dark Theme (Deep Void & Neon) ---- */
 [data-theme="dark"] {
-  --bg-primary: #0f1117;
-  --bg-surface: #1a1b2e;
-  --bg-surface-secondary: #1e1f35;
-  --bg-surface-hover: #252640;
-  --bg-inset: #151627;
-  --bg-overlay: rgba(15, 17, 23, 0.92);
+  --bg-primary: #020617;
+  --bg-surface: rgba(15, 23, 42, 0.7);
+  --bg-surface-secondary: rgba(30, 41, 59, 0.6);
+  --bg-surface-hover: rgba(51, 65, 85, 0.7);
+  --bg-inset: #0f172a;
+  --bg-overlay: rgba(2, 6, 23, 0.8);
+  --bg-body: #020617;
 
-  --text-primary: #e5e7eb;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --text-faint: #4b5563;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
 
-  --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
 
-  --accent: #818cf8;
-  --accent-hover: #a78bfa;
-  --accent-bg: rgba(129, 140, 248, 0.1);
-  --accent-bg-strong: rgba(129, 140, 248, 0.18);
-  --accent-border: rgba(129, 140, 248, 0.15);
-  --accent-shadow: rgba(129, 140, 248, 0.25);
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-light: #ddd6fe;
+  --accent-bg: rgba(167, 139, 250, 0.12);
+  --accent-bg-strong: rgba(167, 139, 250, 0.2);
+  --accent-border: rgba(167, 139, 250, 0.25);
+  --accent-shadow: rgba(167, 139, 250, 0.35);
 
   --success: #34d399;
   --success-deep: #10b981;
-  --success-bg: rgba(52, 211, 153, 0.1);
-  --success-shadow: rgba(52, 211, 153, 0.2);
+  --success-bg: rgba(52, 211, 153, 0.12);
+  --success-shadow: rgba(52, 211, 153, 0.25);
 
   --error: #f87171;
-  --error-bg: rgba(248, 113, 113, 0.08);
-  --error-border: rgba(248, 113, 113, 0.15);
-  --error-hover-bg: rgba(248, 113, 113, 0.12);
+  --error-bg: rgba(248, 113, 113, 0.12);
+  --error-border: rgba(248, 113, 113, 0.2);
+  --error-hover-bg: rgba(248, 113, 113, 0.18);
 
   --warning: #fbbf24;
-  --warning-bg: rgba(251, 191, 36, 0.08);
-  --warning-border: rgba(251, 191, 36, 0.15);
+  --warning-bg: rgba(251, 191, 36, 0.12);
+  --warning-border: rgba(251, 191, 36, 0.2);
 
-  --sql-bg: #0d0e1a;
-  --sql-header-bg: rgba(255, 255, 255, 0.03);
-  --sql-header-text: #6b6e85;
-  --sql-text: #c4b5fd;
-  --sql-border: rgba(255, 255, 255, 0.04);
+  --sql-bg: rgba(0, 0, 0, 0.4);
+  --sql-header-bg: rgba(255, 255, 255, 0.04);
+  --sql-header-text: #94a3b8;
+  --sql-text: #e2e8f0;
+  --sql-border: rgba(255, 255, 255, 0.06);
 
-  --bubble-user-from: #6366f1;
-  --bubble-user-to: #7c3aed;
-  --bubble-ai-bg: #1e1f35;
-  --bubble-ai-border: rgba(255, 255, 255, 0.06);
+  --bubble-user-bg: rgba(124, 58, 237, 0.85);
+  --bubble-user-shadow: rgba(124, 58, 237, 0.3);
+  --bubble-ai-bg: rgba(30, 41, 59, 0.8);
+  --bubble-ai-border: rgba(255, 255, 255, 0.08);
 
-  --input-bg: #1e1f35;
-  --input-border: rgba(255, 255, 255, 0.08);
-  --input-placeholder: #6b7280;
-  --input-disabled-bg: #252640;
+  --input-bg: rgba(15, 23, 42, 0.7);
+  --input-border: rgba(255, 255, 255, 0.12);
+  --input-placeholder: #64748b;
+  --input-disabled-bg: rgba(30, 41, 59, 0.8);
 
-  --scrollbar: rgba(255, 255, 255, 0.06);
-  --scrollbar-hover: rgba(255, 255, 255, 0.12);
+  --scrollbar: rgba(255, 255, 255, 0.08);
+  --scrollbar-hover: rgba(255, 255, 255, 0.16);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.4);
-  --shadow-card: 0 24px 80px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 4px 12px -2px rgba(0, 0, 0, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 12px 32px -4px rgba(0, 0, 0, 0.5), 0 6px 16px -3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 24px 64px -8px rgba(0, 0, 0, 0.7), 0 12px 32px -6px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 32px 80px -12px rgba(0, 0, 0, 0.8), 0 16px 40px -8px rgba(0, 0, 0, 0.5);
 }
 
 *,
@@ -142,14 +149,32 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
+  background: var(--bg-primary);
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg-primary);
+  font-family: var(--font-sans);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Light mode background flourish */
+body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60vh;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.06) 0%, rgba(99, 102, 241, 0.06) 50%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+[data-theme="dark"] body::before {
+  background: radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.1) 0%, transparent 40%),
+              radial-gradient(circle at 85% 85%, rgba(99, 102, 241, 0.1) 0%, transparent 40%);
 }
 
 /* App Layout */
@@ -157,7 +182,7 @@ body {
   display: flex;
   height: 100vh;
   width: 100vw;
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 /* Selection */
@@ -169,6 +194,7 @@ body {
 /* Scrollbar global */
 ::-webkit-scrollbar {
   width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -200,7 +226,7 @@ body {
   border: 3px solid var(--accent-bg);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.8s cubic-bezier(0.6, 0.2, 0.4, 0.8) infinite;
 }
 
 @keyframes spin {
@@ -215,13 +241,44 @@ body {
   .sidebar-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--bg-overlay);
+    backdrop-filter: var(--glass-filter);
+    -webkit-backdrop-filter: var(--glass-filter);
     z-index: 99;
-    animation: fadeIn 0.2s ease;
+    animation: overlayFadeIn 0.25s ease-out;
   }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes overlayFadeIn {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to { opacity: 1; backdrop-filter: var(--glass-filter); }
+}
+
+/* ============================================
+   Global View Transitions
+   ============================================ */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: fade-out 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  ::view-transition-new(root) {
+    animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
+@keyframes fade-out {
+  to { opacity: 0; transform: scale(0.98); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(1.02); }
+  to { opacity: 1; transform: scale(1); }
 }

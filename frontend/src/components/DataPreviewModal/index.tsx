@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import './index.css';
 
@@ -10,7 +11,7 @@ interface DataPreviewModalProps {
 }
 
 export default function DataPreviewModal({ database, table, columns, rows, onClose }: DataPreviewModalProps) {
-  return (
+  return createPortal(
     <div className="preview-modal-overlay" onClick={onClose}>
       <div className="preview-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="preview-modal-header">
@@ -50,6 +51,7 @@ export default function DataPreviewModal({ database, table, columns, rows, onClo
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

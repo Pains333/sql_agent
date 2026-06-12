@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { TableColumn } from '../../types';
-import { listTables, describeTable, previewTable } from '../../api';
+import { listDatabases, listTables, describeTable, previewTable } from '../../api';
 import DataPreviewModal from '../DataPreviewModal';
 import ERDiagramModal from '../ERDiagramModal';
 import { t } from '../../i18n';
@@ -8,19 +8,20 @@ import { X, Database, ChevronDown, ChevronRight, Table2, Eye, Network } from 'lu
 import './index.css';
 
 interface SchemaDrawerProps {
-  currentDb: string;
   onClose: () => void;
   refreshKey?: string | number;
 }
 
-export default function SchemaDrawer({ currentDb, onClose, refreshKey }: SchemaDrawerProps) {
-  const [tables, setTables] = useState<string[]>([]);
+export default function SchemaDrawer({ onClose, refreshKey }: SchemaDrawerProps) {
+  const [databases, setDatabases] = useState<string[]>([]);
+  const [tablesByDb, setTablesByDb] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
+  const [expandedDbs, setExpandedDbs] = useState<Set<string>>(new Set());
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
   const [columns, setColumns] = useState<Record<string, TableColumn[]>>({});
-  const [previewData, setPreviewData] = useState<{ table: string; columns: string[]; rows: any[][] } | null>(null);
+  const [previewData, setPreviewData] = useState<{ database: string; table: string; columns: string[]; rows: any[][] } | null>(null);
   const [loadingTable, setLoadingTable] = useState<string | null>(null);
-  const [erModalOpen, setErModalOpen] = useState(false);
+  const [erModalDb, setErModalDb] = useState<string | null>(null);
 
   // Resize state
   const [drawerWidth, setDrawerWidth] = useState(350);
@@ -37,7 +38,6 @@ export default function SchemaDrawer({ currentDb, onClose, refreshKey }: SchemaD
 
   const resize = useCallback((e: MouseEvent) => {
     if (isResizing.current) {
-      // Since it's on the right, width = window width - mouse X
       const newWidth = window.innerWidth - e.clientX;
       if (newWidth > 200 && newWidth < 800) {
         setDrawerWidth(newWidth);
@@ -54,43 +54,112 @@ export default function SchemaDrawer({ currentDb, onClose, refreshKey }: SchemaD
     };
   }, [resize, stopResizing]);
 
+  // Keep track of expanded items for refresh
+  const expandedStateRef = useRef({ expandedDbs, expandedTables });
   useEffect(() => {
-    setLoading(true);
-    listTables(currentDb)
-      .then((res) => setTables(res.tables))
-      .catch(() => setTables([]))
-      .finally(() => setLoading(false));
-  }, [currentDb, refreshKey]);
+    expandedStateRef.current = { expandedDbs, expandedTables };
+  }, [expandedDbs, expandedTables]);
 
-  async function toggleTable(tableName: string) {
-    setExpandedTables(prev => {
+  useEffect(() => {
+    let cancelled = false;
+    async function refreshData() {
+      setLoading(true);
+      try {
+        const res = await listDatabases();
+        if (cancelled) return;
+        setDatabases(res.databases);
+
+        // Refetch tables for currently expanded databases
+        const dbs = Array.from(expandedStateRef.current.expandedDbs);
+        if (dbs.length > 0) {
+          const newTables: Record<string, string[]> = {};
+          await Promise.all(dbs.map(async (db) => {
+            try {
+              const r = await listTables(db);
+              newTables[db] = r.tables;
+            } catch {
+              newTables[db] = [];
+            }
+          }));
+          if (!cancelled) setTablesByDb(prev => ({ ...prev, ...newTables }));
+        }
+
+        // Refetch columns for currently expanded tables
+        const tables = Array.from(expandedStateRef.current.expandedTables);
+        if (tables.length > 0) {
+          const newCols: Record<string, TableColumn[]> = {};
+          await Promise.all(tables.map(async (key) => {
+            const [db, tbl] = key.split('::');
+            try {
+              const r = await describeTable(db, tbl);
+              newCols[key] = r.columns;
+            } catch {
+              newCols[key] = [];
+            }
+          }));
+          if (!cancelled) setColumns(prev => ({ ...prev, ...newCols }));
+        }
+      } catch (e) {
+        if (!cancelled) setDatabases([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    refreshData();
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  async function toggleDb(db: string) {
+    setExpandedDbs(prev => {
       const next = new Set(prev);
-      if (next.has(tableName)) {
-        next.delete(tableName);
+      if (next.has(db)) {
+        next.delete(db);
       } else {
-        next.add(tableName);
+        next.add(db);
       }
       return next;
     });
 
-    if (!columns[tableName]) {
-      setLoadingTable(tableName);
+    if (!tablesByDb[db]) {
       try {
-        const res = await describeTable(currentDb, tableName);
-        setColumns((prev) => ({ ...prev, [tableName]: res.columns }));
+        const res = await listTables(db);
+        setTablesByDb(prev => ({ ...prev, [db]: res.tables }));
       } catch {
-        setColumns((prev) => ({ ...prev, [tableName]: [] }));
+        setTablesByDb(prev => ({ ...prev, [db]: [] }));
+      }
+    }
+  }
+
+  async function toggleTable(db: string, tableName: string) {
+    const key = `${db}::${tableName}`;
+    setExpandedTables(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+
+    if (!columns[key]) {
+      setLoadingTable(key);
+      try {
+        const res = await describeTable(db, tableName);
+        setColumns((prev) => ({ ...prev, [key]: res.columns }));
+      } catch {
+        setColumns((prev) => ({ ...prev, [key]: [] }));
       } finally {
         setLoadingTable(null);
       }
     }
   }
 
-  async function handlePreview(e: React.MouseEvent, table: string) {
+  async function handlePreview(e: React.MouseEvent, db: string, table: string) {
     e.stopPropagation();
     try {
-      const res = await previewTable(currentDb, table);
-      setPreviewData(res);
+      const res = await previewTable(db, table);
+      setPreviewData({ database: db, table: res.table, columns: res.columns, rows: res.rows });
     } catch (err) {
       console.error('Failed to preview table:', err);
     }
@@ -109,63 +178,79 @@ export default function SchemaDrawer({ currentDb, onClose, refreshKey }: SchemaD
         </button>
       </div>
 
-      <div className="schema-drawer-db">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Database size={14} />
-          {currentDb}
-        </div>
-        <button 
-          className="schema-er-btn"
-          onClick={() => setErModalOpen(true)}
-          title="查看数据库结构ER图"
-        >
-          <Network size={14} />
-          ER
-        </button>
-      </div>
-
       <div className="schema-drawer-body">
         {loading && (
           <div className="schema-loading">{t('schema.loading')}</div>
         )}
-        {!loading && tables.length === 0 && (
+        {!loading && databases.length === 0 && (
           <div className="schema-empty">{t('schema.noTables')}</div>
         )}
-        {tables.map((table) => (
-          <div key={table} className="schema-table-node">
+        {databases.map((db) => (
+          <div key={db} className="schema-db-node" style={{ marginBottom: 12 }}>
             <div
-              className={`schema-table-btn ${expandedTables.has(table) ? 'expanded' : ''}`}
-              onClick={() => toggleTable(table)}
+              className={`schema-table-btn ${expandedDbs.has(db) ? 'expanded' : ''}`}
+              onClick={() => toggleDb(db)}
+              style={{ fontWeight: 600, padding: '8px 12px' }}
             >
-              {expandedTables.has(table) ? (
-                <ChevronDown size={12} />
-              ) : (
-                <ChevronRight size={12} />
-              )}
-              <Table2 size={14} />
-              <span style={{ flex: 1, textAlign: 'left' }}>{table}</span>
+              {expandedDbs.has(db) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <Database size={16} />
+              <span style={{ flex: 1, textAlign: 'left' }}>{db}</span>
               <button 
-                className="schema-preview-btn" 
-                onClick={(e) => handlePreview(e, table)}
-                title="Preview Data"
+                className="schema-er-btn"
+                onClick={(e) => { e.stopPropagation(); setErModalDb(db); }}
+                title="查看数据库结构ER图"
+                style={{ marginLeft: 8 }}
               >
-                <Eye size={14} />
+                <Network size={14} />
               </button>
             </div>
-            {expandedTables.has(table) && (
-              <div className="schema-columns">
-                {loadingTable === table && (
+            
+            {expandedDbs.has(db) && (
+              <div className="schema-tables-list" style={{ marginLeft: 16 }}>
+                {!tablesByDb[db] ? (
                   <div className="schema-col-loading">{t('schema.loading')}</div>
+                ) : tablesByDb[db].length === 0 ? (
+                  <div className="schema-empty">{t('schema.noTables')}</div>
+                ) : (
+                  tablesByDb[db].map((table) => {
+                    const tKey = `${db}::${table}`;
+                    return (
+                      <div key={table} className="schema-table-node">
+                        <div
+                          className={`schema-table-btn ${expandedTables.has(tKey) ? 'expanded' : ''}`}
+                          onClick={() => toggleTable(db, table)}
+                        >
+                          {expandedTables.has(tKey) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                          <Table2 size={14} />
+                          <span style={{ flex: 1, textAlign: 'left' }}>{table}</span>
+                          <button 
+                            className="schema-preview-btn" 
+                            onClick={(e) => handlePreview(e, db, table)}
+                            title="Preview Data"
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </div>
+                        {expandedTables.has(tKey) && (
+                          <div className="schema-columns">
+                            {loadingTable === tKey && (
+                              <div className="schema-col-loading">{t('schema.loading')}</div>
+                            )}
+                            {columns[tKey]?.map((col) => (
+                              <div key={col.name} className="schema-col-item">
+                                <span className="schema-col-name" title={col.name}>{col.name}</span>
+                                <span className="schema-col-type" title={col.type}>{col.type}</span>
+                                {col.constraints && (
+                                  <span className="schema-col-constraint" title={col.constraints}>{col.constraints}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
-                {columns[table]?.map((col) => (
-                  <div key={col.name} className="schema-col-item">
-                    <span className="schema-col-name" title={col.name}>{col.name}</span>
-                    <span className="schema-col-type" title={col.type}>{col.type}</span>
-                    {col.constraints && (
-                      <span className="schema-col-constraint" title={col.constraints}>{col.constraints}</span>
-                    )}
-                  </div>
-                ))}
               </div>
             )}
           </div>
@@ -174,7 +259,7 @@ export default function SchemaDrawer({ currentDb, onClose, refreshKey }: SchemaD
 
       {previewData && (
         <DataPreviewModal
-          database={currentDb}
+          database={previewData.database}
           table={previewData.table}
           columns={previewData.columns}
           rows={previewData.rows}
@@ -182,10 +267,10 @@ export default function SchemaDrawer({ currentDb, onClose, refreshKey }: SchemaD
         />
       )}
 
-      {erModalOpen && (
+      {erModalDb && (
         <ERDiagramModal 
-          database={currentDb} 
-          onClose={() => setErModalOpen(false)} 
+          database={erModalDb} 
+          onClose={() => setErModalDb(null)} 
         />
       )}
     </div>

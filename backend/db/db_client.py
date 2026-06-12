@@ -121,9 +121,22 @@ class DBClient:
 
     def connect_to_db(self, database: str) -> None:
         """切换到指定数据库"""
+        if self.current_db == database and not self._is_closed():
+            return
+            
+        old_db = self.current_db
         self.close()
         self.current_db = database
-        self._connect()
+        try:
+            self._connect()
+        except Exception:
+            # 如果连接新数据库失败，尝试恢复旧数据库的连接
+            self.current_db = old_db
+            try:
+                self._connect()
+            except Exception:
+                pass
+            raise
 
     def _ensure_database(self, database: Optional[str]) -> None:
         """如果 database 与当前数据库不同，自动切换连接（Oracle 除外）"""

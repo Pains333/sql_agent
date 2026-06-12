@@ -23,20 +23,18 @@ class ParseSqlRequest(BaseModel):
 @router.get("/api/lineage")
 def get_lineage():
     ag = require_agent()
-    current_db = ag.db.current_db if ag.db else None
-    return ag.lineage.list_lineage(db_name=current_db)
+    return ag.lineage.list_lineage()
 
 @router.post("/api/lineage")
 def create_lineage(req: LineageEntryCreate):
     ag = require_agent()
-    current_db = ag.db.current_db if ag.db else ""
     entry = ag.lineage.add_lineage(
         req.source_table,
         req.source_column,
         req.target_table,
         req.target_column,
         req.transform_logic,
-        db_name=current_db
+        db_name=""
     )
     return {"success": True, "data": entry}
 

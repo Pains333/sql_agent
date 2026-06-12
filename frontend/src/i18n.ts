@@ -171,6 +171,8 @@ const texts = {
 
   // Dictionary
   'dict.title': { zh: '业务字典 & 知识库', en: 'Business Dictionary & Knowledge Base' },
+  'dict.table': { zh: '表名', en: 'Table' },
+  'dict.column': { zh: '列名', en: 'Column' },
   'dict.search': { zh: '搜索术语...', en: 'Search terms...' },
   'dict.add': { zh: '新增规则', en: 'Add Rule' },
   'dict.loading': { zh: '加载中...', en: 'Loading...' },
@@ -195,6 +197,11 @@ const texts = {
 
   // Lineage
   'lineage.title': { zh: '数据血缘追踪', en: 'Data Lineage' },
+  'lineage.source': { zh: '源端信息', en: 'Source' },
+  'lineage.target': { zh: '目标端信息', en: 'Target' },
+  'lineage.logic': { zh: '转换逻辑', en: 'Transform Logic' },
+  'lineage.logicPlaceholder': { zh: '如: 通过 substring() 函数截取前10位...', en: 'e.g. Extract first 10 chars using substring()...' },
+  'lineage.viewGraph': { zh: '查看整体血缘网络', en: 'View Lineage Graph' },
   'lineage.search': { zh: '搜索表名或列名...', en: 'Search tables or columns...' },
   'lineage.add': { zh: '新增血缘', en: 'Add Lineage' },
   'lineage.parse': { zh: '智能提取', en: 'Smart Parse' },

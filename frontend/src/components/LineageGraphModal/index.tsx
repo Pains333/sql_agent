@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import mermaid from 'mermaid';
 import { X, ZoomIn, ZoomOut, Maximize, Network } from 'lucide-react';
 import { LineageEntry } from '../../types';
@@ -47,19 +48,18 @@ export default function LineageGraphModal({ entries, onClose }: LineageGraphModa
         const edges: string[] = [];
         
         entries.forEach(e => {
+          if (!e.source_table || !e.target_table) return;
+
           const srcId = `${e.source_table}_${e.source_column}`.replace(/[^a-zA-Z0-9]/g, '_');
           const dstId = `${e.target_table}_${e.target_column}`.replace(/[^a-zA-Z0-9]/g, '_');
           
           if (!tableNodes.has(e.source_table)) tableNodes.set(e.source_table, new Map());
           if (!tableNodes.has(e.target_table)) tableNodes.set(e.target_table, new Map());
           
-          tableNodes.get(e.source_table)!.set(srcId, e.source_column);
-          tableNodes.get(e.target_table)!.set(dstId, e.target_column);
+          tableNodes.get(e.source_table)!.set(srcId, e.source_column || 'UNKNOWN');
+          tableNodes.get(e.target_table)!.set(dstId, e.target_column || 'UNKNOWN');
           
-          let logic = e.transform_logic || '';
-          logic = logic.replace(/[\n\r]/g, ' ').replace(/"/g, "'");
-          let edgeText = logic ? `|"${logic.substring(0, 30)}${logic.length > 30 ? '...' : ''}"|` : '';
-          edges.push(`  ${srcId} -->${edgeText} ${dstId}`);
+          edges.push(`  ${srcId} --> ${dstId}`);
         });
 
         // Output subgraphs for tables
@@ -114,8 +114,8 @@ export default function LineageGraphModal({ entries, onClose }: LineageGraphModa
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.2, 0.3));
   const handleResetZoom = () => setZoom(1);
 
-  return (
-    <div className="lineage-modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div className="lineage-graph-overlay" onClick={onClose}>
       <div className="lineage-graph-modal-container" onClick={e => e.stopPropagation()}>
         <div className="lineage-graph-modal-header">
           <div className="lineage-graph-modal-title">
@@ -146,6 +146,7 @@ export default function LineageGraphModal({ entries, onClose }: LineageGraphModa
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -32,9 +32,6 @@ class TitleUpdate(BaseModel):
     title: str
 
 
-class SwitchDatabaseRequest(BaseModel):
-    database: str
-
 
 class ExecuteRequest(BaseModel):
     sql: str

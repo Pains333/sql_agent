@@ -2,7 +2,7 @@ import re
 import requests
 from fastapi import APIRouter, HTTPException
 
-from backend.models import SwitchDatabaseRequest, PaginateRequest, ExplainRequest
+from backend.models import PaginateRequest, ExplainRequest
 from backend.state import require_agent, agent as _agent_ref, store
 from backend.core.logging_config import get_logger
 
@@ -35,20 +35,6 @@ def list_databases():
         raise _safe_error(e, "获取数据库列表")
 
 
-@router.post("/api/databases/switch")
-def switch_database(req: SwitchDatabaseRequest):
-    """切换当前数据库"""
-    ag = require_agent()
-    try:
-        ag.db.connect_to_db(req.database)
-        ag.scan_all_databases()
-        return {
-            "success": True,
-            "message": f"已切换到 {req.database}",
-            "current": ag.db.current_db,
-        }
-    except Exception as e:
-        raise _safe_error(e, "切换数据库")
 
 
 @router.get("/api/databases/{db}/tables")

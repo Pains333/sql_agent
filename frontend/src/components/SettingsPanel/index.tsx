@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { Lang } from '../../i18n';
 import { t } from '../../i18n';
 import {
@@ -45,7 +46,7 @@ export default function SettingsPanel({
   }, [onClose]);
 
 
-  return (
+  return createPortal(
     <>
       <div className="settings-overlay" onClick={onClose} />
       <div className="settings-panel" ref={panelRef}>
@@ -101,6 +102,7 @@ export default function SettingsPanel({
 
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

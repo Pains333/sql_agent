@@ -10,10 +10,7 @@ import {
   deleteConversation,
   getSetupStatus,
   resetSetup,
-  listDatabases,
-  switchDatabase,
 } from './api';
-import type { DatabaseInfo } from './types';
 import SetupWizard from './components/SetupWizard';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
@@ -29,7 +26,6 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
   const [isLineageOpen, setIsLineageOpen] = useState(false);
-  const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
 
   // Keep a ref to the latest activeId to avoid jumping back
   // to an old conversation when a background stream finishes.
@@ -97,48 +93,37 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  const refreshList = useCallback(async (dbName?: string) => {
+  const refreshList = useCallback(async () => {
     try {
-      const list = await listConversations(dbName);
+      const list = await listConversations();
       setConversations(list);
     } catch (err) {
       console.error('获取对话列表失败:', err);
     }
   }, []);
 
-  const refreshDatabases = useCallback(async () => {
-    try {
-      const info = await listDatabases();
-      setDbInfo(info);
-      return info;
-    } catch { return null; }
-  }, []);
-
-  async function handleSwitchDb(db: string) {
-    try {
-      await switchDatabase(db);
-      await refreshDatabases();
-      setActiveId(null);
-      setActiveConv(null);
-      await refreshList(db);
-    } catch (err) {
-      console.error('Switch DB failed:', err);
-    }
-  }
-
   useEffect(() => {
     if (setupDone) {
-      refreshDatabases().then(info => {
-        refreshList(info?.current);
-      });
+      refreshList();
     }
-  }, [setupDone, refreshList, refreshDatabases]);
+  }, [setupDone, refreshList]);
 
   const loadConversation = useCallback(async (id: string) => {
     try {
       const conv = await getConversation(id);
-      setActiveConv(conv);
-      setActiveId(id);
+      
+      // @ts-ignore
+      if (!document.startViewTransition) {
+        setActiveConv(conv);
+        setActiveId(id);
+        return;
+      }
+      
+      // @ts-ignore
+      document.startViewTransition(() => {
+        setActiveConv(conv);
+        setActiveId(id);
+      });
     } catch (err) {
       console.error('获取对话详情失败:', err);
     }
@@ -146,10 +131,21 @@ export default function App() {
 
   async function _createAndActivate(): Promise<string | null> {
     try {
-      const conv = await createConversation('新对话', dbInfo?.current);
-      await refreshList(dbInfo?.current);
-      setActiveId(conv.id);
-      setActiveConv({ ...conv, messages: [] });
+      const conv = await createConversation('新对话');
+      await refreshList();
+      
+      // @ts-ignore
+      if (!document.startViewTransition) {
+        setActiveId(conv.id);
+        setActiveConv({ ...conv, messages: [] });
+        return conv.id;
+      }
+      
+      // @ts-ignore
+      document.startViewTransition(() => {
+        setActiveId(conv.id);
+        setActiveConv({ ...conv, messages: [] });
+      });
       return conv.id;
     } catch (err) {
       console.error('创建对话失败:', err);
@@ -175,7 +171,7 @@ export default function App() {
         setActiveId(null);
         setActiveConv(null);
       }
-      await refreshList(dbInfo?.current);
+      await refreshList();
     } catch (err) {
       console.error('删除对话失败:', err);
     }
@@ -190,7 +186,7 @@ export default function App() {
     if (activeIdRef.current === convId) {
       await loadConversation(convId);
     }
-    await refreshList(dbInfo?.current);
+    await refreshList();
   }
 
   function handleSetupComplete() {
@@ -239,8 +235,18 @@ export default function App() {
         onToggleTheme={toggleTheme}
         lang={lang}
         onLangChange={handleLangChange}
-        onOpenDictionary={() => setIsDictionaryOpen(prev => !prev)}
-        onOpenLineage={() => setIsLineageOpen(prev => !prev)}
+        onOpenDictionary={() => {
+          setIsDictionaryOpen(prev => {
+            if (!prev) setIsLineageOpen(false);
+            return !prev;
+          });
+        }}
+        onOpenLineage={() => {
+          setIsLineageOpen(prev => {
+            if (!prev) setIsDictionaryOpen(false);
+            return !prev;
+          });
+        }}
       />
       <ChatArea
         key={activeConv?.id || 'new'}
@@ -250,11 +256,9 @@ export default function App() {
         sidebarCollapsed={!sidebarOpen}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         lang={lang}
-        dbInfo={dbInfo}
-        onSwitchDb={handleSwitchDb}
       />
-      <DictionaryPanel isOpen={isDictionaryOpen} onClose={() => setIsDictionaryOpen(false)} currentDb={dbInfo?.current} />
-      <LineagePanel isOpen={isLineageOpen} onClose={() => setIsLineageOpen(false)} currentDb={dbInfo?.current} />
+      <DictionaryPanel isOpen={isDictionaryOpen} onClose={() => setIsDictionaryOpen(false)} />
+      <LineagePanel isOpen={isLineageOpen} onClose={() => setIsLineageOpen(false)} />
     </div>
   );
 }

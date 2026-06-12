@@ -69,19 +69,18 @@ create_db | drop_db | create_table | drop_table | alter_table | query | insert |
 {business_rules}
 {lineage_context}
 
-## 当前数据库：{current_db}
 
 ## 回复语言：{language_instruction}
 """
 
 
-def build_system_prompt(skill_context: str, current_db: str, db_type: str = "postgresql", language: str = "zh", business_rules: str = "", lineage_context: str = "") -> str:
+def build_system_prompt(skill_context: str, db_type: str = "postgresql", language: str = "zh", business_rules: str = "", lineage_context: str = "") -> str:
     """
     构建完整的系统提示词
 
     Args:
         skill_context: skill.md 的内容摘要
-        current_db: 当前连接的数据库名
+
         db_type: 数据库类型
         language: 用户界面语言 (zh/en)
         business_rules: 业务规则字典
@@ -112,7 +111,6 @@ def build_system_prompt(skill_context: str, current_db: str, db_type: str = "pos
         skill_context=skill_context,
         business_rules=business_rules,
         lineage_context=lineage_context,
-        current_db=current_db,
         language_instruction=language_instruction,
     )
 
@@ -132,7 +130,6 @@ AUTO_FIX_PROMPT = """你是 {db_type_display} 数据库助手。之前生成的 
 ## 当前数据库状态：
 {skill_context}
 
-## 当前数据库：{current_db}
 
 ## 修正要求：
 1. 仔细分析错误原因（拼写错误？表/列不存在？语法问题？）
@@ -142,7 +139,7 @@ AUTO_FIX_PROMPT = """你是 {db_type_display} 数据库助手。之前生成的 
 5. 这是第 {attempt} 次修正尝试（最多 {max_attempts} 次）
 
 ## 输出格式（严格 JSON，不要包裹 markdown）：
-{{"action":"{action}","sql":"修正后的SQL","explanation":"修正说明：原因 + 改了什么","database":"{current_db}"}}
+{{"action":"{action}","sql":"修正后的SQL","explanation":"修正说明：原因 + 改了什么","database":"目标数据库名"}}
 """
 
 
@@ -151,7 +148,7 @@ def build_auto_fix_prompt(
     error_message: str,
     action: str,
     skill_context: str,
-    current_db: str,
+
     db_type: str = "postgresql",
     attempt: int = 1,
     max_attempts: int = 3,
@@ -164,7 +161,7 @@ def build_auto_fix_prompt(
         error_message: 数据库返回的错误信息
         action: 原始 action 类型
         skill_context: skill.md 的内容
-        current_db: 当前数据库名
+
         db_type: 数据库类型
         attempt: 当前重试次数
         max_attempts: 最大重试次数
@@ -186,7 +183,7 @@ def build_auto_fix_prompt(
         error_message=error_message,
         action=action,
         skill_context=skill_context,
-        current_db=current_db,
+
         attempt=attempt,
         max_attempts=max_attempts,
     )
